@@ -1,0 +1,5 @@
+include_rules
+
+: boot.s.inc |> tup varsed %f %o |> boot.s
+: foreach *.c |> !cc |>
+: foreach *.s |> !as |>
