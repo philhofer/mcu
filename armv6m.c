@@ -8,10 +8,20 @@ void systick_entry(void);
 void svcall_entry(void);
 void pendsv_entry(void);
 
-extern void main(void);
+extern void start(void);
+
+extern uchar _sbss;
+extern uchar _ebss;
 
 void reset_entry(void) {
-	main();
+	ulong bss_start = (ulong)(&_sbss);
+	ulong bss_end = (ulong)(&_ebss);
+	while (bss_start != bss_end) {
+		write32(bss_start, 0);
+		bss_start += 4;
+	}
+
+	start();
 	reboot();
 }
 
@@ -19,12 +29,23 @@ typedef void (*irq_handler)(unsigned);
 
 static irq_handler handlers[16];
 
+__attribute__((noreturn))
+static inline void eret(void) {
+	__asm__ volatile (
+		"mov r0, #0     \n\t"
+		"sub r0, r0, #7 \n\t"
+		"bx  r0         \n\t"
+		);
+	while (1) ;
+	__builtin_unreachable();
+}
+
 void irq_entry(void) {
 	int n = irq_number();
 	irq_handler handler = handlers[n];
 	if (handler != 0)
 		handler(n);
-	return;
+	eret();
 }
 
 void irq_register(unsigned num, void (*fn)(unsigned)) {
@@ -36,17 +57,27 @@ static void clear_pendsv();
 
 void systick_entry(void) {
 	clear_systick();
-	return;
+	eret();
 }
 
 void svcall_entry(void) {
 	/* TODO */
-	return;
+	eret();
 }
 
 void pendsv_entry(void) {
 	clear_pendsv();
-	return;
+	eret();
+}
+
+void nmi_entry(void) {
+	/* TODO */
+	while (1) ;
+}
+
+void hardfault_entry(void) {
+	/* TODO */
+	while (1) ;
 }
 
 #define SCB_ACTLR 0xE000E008   /* implementation-defined "auxilliary control register */
