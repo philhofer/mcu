@@ -1,5 +1,10 @@
 include_rules
 
+: |> NUM_IRQ=@(NUM_IRQ) ./mkboot.sh > %o |> boot.s.inc
+
 : foreach *.inc |> tup varsed %f %o |> %B
-: foreach *.c |> !cc |>
-: foreach *.s |> !as |>
+: foreach *.c |> !cc |> {objects}
+: foreach *.s |> !as |> {objects}
+
+# TODO: modularize this
+: {objects} | @(BOARD).ld |> $(LD) -T @(BOARD).ld %f -o %o |> kernel.elf

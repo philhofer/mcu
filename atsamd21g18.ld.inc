@@ -3,6 +3,8 @@ MEMORY {
        FLASH(rx): ORIGIN = 0x00000000, LENGTH = 256K
 }
 
+ENTRY(reset_entry)
+
 SECTIONS {
 	 vector_table :
 	 {
@@ -25,10 +27,9 @@ SECTIONS {
 
 	 _sidata = .;
 
-	 . = @STACK_TOP@;
-
 	 .data :
 	 {
+		. = @STACK_SIZE@;
 		. = ALIGN(4);
 		_sdata = .;
 		*(.data)

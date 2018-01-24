@@ -2,22 +2,11 @@
 #define __ARMV6M_H_
 #include "bits.h"
 
-/* irq_register() registers a function to be
- * called when a particular interrupt is triggered.
- * If there is already an irq handler registered
- * for this interrupt, it is overwritten.
- * You should probably only be overwriting interrupt
- * handlers with interrupts turned off
- * (see irq_disable()). */
-void irq_register(unsigned n, void (*fn)(unsigned));
-
 /* reboot() reboots the board.
  * Note that reboot may return, since
  * reboot requests are not guaranteed to
  * be serviced instantly. */
 void reboot(void);
-
-extern void main(void);
 
 /* enable all interrupt sources */
 static inline void irq_disable(void) {
@@ -88,6 +77,11 @@ void irq_enable_num(unsigned n);
  * Valid priorities are 0-3, inclusive, with lower
  * priorities being served first. */
 void irq_set_priority(unsigned n, unsigned prio);
+
+/* irq_get_priority() gets the priority of irq 'n'
+ * Valid priorities are 0-3, inlusive, with lower
+ * priorities being served first. */
+unsigned irq_get_priority(unsigned n);
 
 /* irq_num_is_enabled() returns whether or not
  * irq 'n' is enabled. */

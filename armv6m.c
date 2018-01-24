@@ -3,7 +3,6 @@
 
 /* called from assembly via vector-table */
 void reset_entry(void);
-void irq_entry(void);
 void systick_entry(void);
 void svcall_entry(void);
 void pendsv_entry(void);
@@ -13,7 +12,13 @@ extern void start(void);
 extern uchar _sbss;
 extern uchar _ebss;
 
+static void systick_setup(void);
+
+ulong systicks;
+ulong tickbias;
+
 void reset_entry(void) {
+	/* clear the bss section */
 	ulong bss_start = (ulong)(&_sbss);
 	ulong bss_end = (ulong)(&_ebss);
 	while (bss_start != bss_end) {
@@ -21,53 +26,22 @@ void reset_entry(void) {
 		bss_start += 4;
 	}
 
+	/* kill any stray interrupts */
+	irq_clear_pending();
+
+	systick_setup();
+
 	start();
 	reboot();
-}
-
-typedef void (*irq_handler)(unsigned);
-
-static irq_handler handlers[16];
-
-__attribute__((noreturn))
-static inline void eret(void) {
-	__asm__ volatile (
-		"mov r0, #0     \n\t"
-		"sub r0, r0, #7 \n\t"
-		"bx  r0         \n\t"
-		);
 	while (1) ;
-	__builtin_unreachable();
-}
-
-void irq_entry(void) {
-	int n = irq_number();
-	irq_handler handler = handlers[n];
-	if (handler != 0)
-		handler(n);
-	eret();
-}
-
-void irq_register(unsigned num, void (*fn)(unsigned)) {
-	handlers[num] = fn;
-}
-
-static void clear_systick();
-static void clear_pendsv();
-
-void systick_entry(void) {
-	clear_systick();
-	eret();
 }
 
 void svcall_entry(void) {
 	/* TODO */
-	eret();
 }
 
 void pendsv_entry(void) {
-	clear_pendsv();
-	eret();
+	/* TODO */
 }
 
 void nmi_entry(void) {
@@ -92,14 +66,6 @@ void hardfault_entry(void) {
 #define SCB_SHCSR 0xE000ED24 /* system handler control and stat register */
 #define SCB_DFSR  0xE000ED30 /* debug fault status register */
 
-static void clear_pendsv(void) {
-	write32(SCB_ICSR, read32(SCB_ICSR) | 1 << 27);
-}
-
-static void clear_systick(void) {
-	write32(SCB_ICSR, read32(SCB_ICSR) | 1 << 25);
-}
-
 /* relocate the vector table to a different address */
 void set_vtor(ulong addr) {
 	write32(SCB_VTOR, addr);
@@ -118,18 +84,46 @@ void reboot(void) {
 #define SYST_CVR   0xE000E018  /* current value register */
 #define SYST_CALIB 0xE000E01C  /* implementation-defined calibration register */
 
+#define TICK_MASK (((ulong)1 << 24) - 1)
+
+void systick_entry(void) {
+	ulong overrun = read32(SYST_CVR) & TICK_MASK;
+	ulong tenms = read32(SYST_CALIB) & TICK_MASK;
+	if (overrun < tenms) {
+		tickbias += tenms - overrun;
+		while (tickbias >= tenms) {
+			tickbias -= tenms;
+			systicks++;
+		}
+	}
+	systicks++;
+}
+
+static void systick_setup(void) {
+	ulong calib = read32(SYST_CALIB);
+	ulong tenms = calib & TICK_MASK;
+	if (tenms == 0)
+		return; /* TODO: find another way to calibrate the timer... */
+
+	write32(SYST_CVR, 0);
+	write32(SYST_RVR, tenms);
+	write32(SYST_CSR, 3); /* enable systick interrupts; turn systick on */
+}
+
 #define NVIC_ISER 0xE000E100 /* interrupt set-enable register */
 #define NVIC_ICER 0xE000E180 /* interrupt clear-enable register */
 #define NVIC_ISPR 0xE000E200 /* interrupt set-pending register */
 #define NVIC_ICPR 0xE000E280 /* interrupt clear-pending register */
 #define NVIC_IPR0 0xE000E400 /* interrupt priority register base */
 
+#define set_bit(reg, n) write32(reg, read32(reg) | ((ulong)1 << (n)));
+
 void irq_enable_num(unsigned n) {
-	write32(NVIC_ISER, read32(NVIC_ISER) | (1 << n));
+	set_bit(NVIC_ISER, n);
 }
 
 void irq_disable_num(unsigned n) {
-	write32(NVIC_ICER, read32(NVIC_ICER) | (1 << n));
+	set_bit(NVIC_ICER, n);
 }
 
 bool irq_num_is_enabled(unsigned n) {
@@ -142,14 +136,20 @@ void irq_clear_pending(void) {
 }
 
 void irq_set_priority(unsigned num, unsigned prio) {
-	if (prio > 3)
+	if (prio > 3 || num > 31)
 		return;
 	/* there are 8 NVIC_IPRn registers, each with 4 priorities */
-	ulong reg = NVIC_IPR0 + 4*(num / 4);
-	ulong shift = num % 4;
-	ulong mask = 3;
-	ulong val = read32(reg);
-	val &= ~(mask << shift);
+	ulong val = read32(NVIC_IPR0 + num);
+	ulong shift = 6 + 8 * (num % 4);
+	val &= ~(3 << shift);
 	val |= (prio << shift);
-	write32(reg, val);
+	write32(NVIC_IPR0 + num, val);
+}
+
+unsigned irq_get_priority(unsigned num) {
+	if (num > 31)
+		return 0;
+	ulong val = read32(NVIC_IPR0 + num);
+	ulong shift = 6 + 8 * (num % 4);
+	return (val & (3 << shift)) >> shift;
 }
