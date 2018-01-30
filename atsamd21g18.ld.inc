@@ -6,15 +6,9 @@ MEMORY {
 ENTRY(reset_entry)
 
 SECTIONS {
-	 vector_table :
+	 .text : AT(0)
 	 {
-		. = ALIGN(4);
-		*(vector_table)
-		. = ALIGN(4);
-	 } >FLASH
-
-	 .text :
-	 {
+		*(.vector_table)
 		. = ALIGN(4);
 		_stext = .;
 		*(.text)
@@ -29,7 +23,6 @@ SECTIONS {
 
 	 .data : AT(_sidata)
 	 {
-		. = @STACK_SIZE@;
 		. = ALIGN(4);
 		_sdata = .;
 		*(.data)

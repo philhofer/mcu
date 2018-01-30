@@ -7,8 +7,8 @@ cat <<EOF
     .cpu cortex-m0
     .arch armv6-m
     .thumb
-    .pushsection vector_table
-    .word 0x20000000+@STACK_SIZE@
+    .pushsection .vector_table
+    .word @STACK_TOP@
     .word reset_entry
     .word nmi_entry
     .word hardfault_entry

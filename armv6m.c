@@ -17,19 +17,40 @@ extern void board_setup(void);
 
 extern uchar _sbss;
 extern uchar _ebss;
+extern uchar _sidata;
+extern uchar _sdata;
+extern uchar _edata;
 
 static void systick_setup(void);
 
 ulong systicks;
 
-void reset_entry(void) {
-	/* clear the bss section */
+static void setup_data(void) {
+	ulong flashdata = (ulong)(&_sidata);
+	ulong memdata = (ulong)(&_sdata);
+	ulong enddata = (ulong)(&_edata);
+
+	while (memdata < enddata) {
+		write32(memdata, read32(flashdata));
+		memdata += 4;
+		flashdata += 4;
+	}
+}
+
+static void setup_bss(void) {
 	ulong bss_start = (ulong)(&_sbss);
 	ulong bss_end = (ulong)(&_ebss);
 	while (bss_start != bss_end) {
 		write32(bss_start, 0);
 		bss_start += 4;
 	}
+}
+
+void reset_entry(void) {
+	/* clear the bss section */
+	setup_bss();
+	setup_data();
+
 
 	/* kill any stray interrupts */
 	irq_clear_pending();
