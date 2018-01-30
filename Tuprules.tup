@@ -5,6 +5,7 @@ CC = @(CC)
 LD = @(LD)
 AR = @(AR)
 AS = @(AS)
+OBJCOPY = @(OBJCOPY)
 
 CFLAGS += -Wall -Werror -Os @(CFLAGS)
 LDFLAGS += @(LDFLAGS)

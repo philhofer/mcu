@@ -27,7 +27,7 @@ SECTIONS {
 
 	 _sidata = .;
 
-	 .data :
+	 .data : AT(_sidata)
 	 {
 		. = @STACK_SIZE@;
 		. = ALIGN(4);
@@ -38,7 +38,7 @@ SECTIONS {
 		_edata = .;
 	 } >RAM
 
-	 .bss :
+	 .bss : AT(_edata)
 	 {
 		. = ALIGN(4);
 		_sbss = .;

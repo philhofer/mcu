@@ -1,13 +1,19 @@
+#include "config.h"
 #include "armv6m.h"
 #include "bits.h"
+
+#define stub __attribute__((weak, alias("empty_handler")))
 
 /* called from assembly via vector-table */
 void reset_entry(void);
 void systick_entry(void);
-void svcall_entry(void);
-void pendsv_entry(void);
+stub void svcall_entry(void);
+stub void pendsv_entry(void);
+stub void nmi_entry(void);
+stub void hardfault_entry(void);
 
 extern void start(void);
+extern void board_setup(void);
 
 extern uchar _sbss;
 extern uchar _ebss;
@@ -15,7 +21,6 @@ extern uchar _ebss;
 static void systick_setup(void);
 
 ulong systicks;
-ulong tickbias;
 
 void reset_entry(void) {
 	/* clear the bss section */
@@ -28,29 +33,16 @@ void reset_entry(void) {
 
 	/* kill any stray interrupts */
 	irq_clear_pending();
-
+	board_setup();
 	systick_setup();
 
+	irq_enable();
 	start();
 	reboot();
 	while (1) ;
 }
 
-void svcall_entry(void) {
-	/* TODO */
-}
-
-void pendsv_entry(void) {
-	/* TODO */
-}
-
-void nmi_entry(void) {
-	/* TODO */
-	while (1) ;
-}
-
-void hardfault_entry(void) {
-	/* TODO */
+void empty_handler(void) {
 	while (1) ;
 }
 
@@ -87,27 +79,29 @@ void reboot(void) {
 #define TICK_MASK (((ulong)1 << 24) - 1)
 
 void systick_entry(void) {
-	ulong overrun = read32(SYST_CVR) & TICK_MASK;
-	ulong tenms = read32(SYST_CALIB) & TICK_MASK;
-	if (overrun < tenms) {
-		tickbias += tenms - overrun;
-		while (tickbias >= tenms) {
-			tickbias -= tenms;
-			systicks++;
-		}
-	}
 	systicks++;
 }
 
-static void systick_setup(void) {
-	ulong calib = read32(SYST_CALIB);
-	ulong tenms = calib & TICK_MASK;
-	if (tenms == 0)
-		return; /* TODO: find another way to calibrate the timer... */
+/*
+static bool systick_pending(void) {
+	return ((read32(SCB_ICSR)>>26)&1) != 0;
+}
+*/
 
+static void systick_setup(void) {
+	/* the mfg. can specify a calibration value for 10ms ticks */
+	ulong tenms = read32(SYST_CALIB)&TICK_MASK;
+	if (tenms == 0)
+		tenms = CPU_HZ/100;
+
+	/* set systick priority to 0 (highest) */
+	write32(SCB_SHPR3, 0);
+	/* clear the current systick value (if any) */
 	write32(SYST_CVR, 0);
-	write32(SYST_RVR, tenms);
-	write32(SYST_CSR, 3); /* enable systick interrupts; turn systick on */
+	/* set the reset value to 1ms */
+	write32(SYST_RVR, tenms / 10);
+	/* enable systick interrupts; enable systick */
+	write32(SYST_CSR, 3);
 }
 
 #define NVIC_ISER 0xE000E100 /* interrupt set-enable register */
@@ -136,7 +130,7 @@ void irq_clear_pending(void) {
 }
 
 void irq_set_priority(unsigned num, unsigned prio) {
-	if (prio > 3 || num > 31)
+	if (prio > 3 || num >= NUM_IRQ)
 		return;
 	/* there are 8 NVIC_IPRn registers, each with 4 priorities */
 	ulong val = read32(NVIC_IPR0 + num);
@@ -147,7 +141,7 @@ void irq_set_priority(unsigned num, unsigned prio) {
 }
 
 unsigned irq_get_priority(unsigned num) {
-	if (num > 31)
+	if (num >= NUM_IRQ)
 		return 0;
 	ulong val = read32(NVIC_IPR0 + num);
 	ulong shift = 6 + 8 * (num % 4);
