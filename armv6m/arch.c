@@ -1,6 +1,6 @@
-#include "config.h"
-#include "armv6m.h"
-#include "bits.h"
+#include <config.h>
+#include <arch.h>
+#include <bits.h>
 
 #define stub __attribute__((weak, alias("empty_handler")))
 

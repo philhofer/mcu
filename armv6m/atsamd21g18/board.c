@@ -1,4 +1,4 @@
-#include "armv6m.h"
+#include <arch.h>
 
 #define stub __attribute__((weak, alias("empty_irq_handler")))
 

@@ -1,4 +1,4 @@
-#include "armv6m.h"
+#include <arch.h>
 
 void start(void) {
 	while (1) ;

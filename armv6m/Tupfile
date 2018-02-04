@@ -1,0 +1,7 @@
+include_rules
+
+: |> NUM_IRQ=@(NUM_IRQ) ./mkboot.sh > %o |> boot.s.inc
+
+: foreach *.inc |> tup varsed %f %o |> %B
+: foreach *.c | *.h $(ROOT)/*.h |> !cc |>
+: foreach *.s |> !as |>

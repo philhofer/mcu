@@ -1,6 +1,6 @@
 #ifndef __ARMV6M_H_
 #define __ARMV6M_H_
-#include "bits.h"
+#include <bits.h>
 
 /* reboot() reboots the board.
  * Note that reboot may return, since
@@ -66,10 +66,6 @@ static inline unsigned irq_number(void) {
 static inline bool in_irq(void) {
 	return irq_number() != 0;
 }
-
-/* set_vtor() sets the vector table offset register.
- * The vector table needs to be naturally-aligned. */
-void set_vtor(ulong addr);
 
 /* irq_disable_num() disables irq number 'n' */
 void irq_disable_num(unsigned n);
