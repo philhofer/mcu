@@ -31,7 +31,7 @@ SECTIONS {
 		_edata = .;
 	 } >RAM
 
-	 .bss : AT(_edata)
+	 .bss :
 	 {
 		. = ALIGN(4);
 		_sbss = .;

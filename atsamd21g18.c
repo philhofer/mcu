@@ -139,10 +139,10 @@ static void dfll_enable(void) {
 	/* enable all the things (but no the clock, yet) */
 	ulong reg = read32(SYSCTRL_DFLLCTRL);
 	/* bit 1: enable
-	   bit 3: stable: FINE calibration register value will be fixed
-	   bit 5: usbcrm: usb clock recovery mode enable
-	   bit 8: ccdis: chill cycle disable
-	   bit 10: bplckc: bypass coarse lock procedure  */
+	 * bit 3: stable: FINE calibration register value will be fixed
+	 * bit 5: usbcrm: usb clock recovery mode enable
+	 * bit 8: ccdis: chill cycle disable
+	 * bit 10: bplckc: bypass coarse lock procedure  */
 	reg |= 0b10100101010;
 	write32(SYSCTRL_DFLLCTRL, reg);
 	while (read32(SYSCTRL_PCLKSR)&(1 << 4)) ;

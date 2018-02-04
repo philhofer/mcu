@@ -15,42 +15,37 @@ stub void hardfault_entry(void);
 extern void start(void);
 extern void board_setup(void);
 
-extern uchar _sbss;
-extern uchar _ebss;
-extern uchar _sidata;
-extern uchar _sdata;
-extern uchar _edata;
+extern ulong _sbss;
+extern ulong _ebss;
+extern ulong _sdata;
+extern ulong _edata;
+extern const ulong _sidata;
 
 static void systick_setup(void);
 
 ulong systicks;
 
-static void setup_data(void) {
-	ulong flashdata = (ulong)(&_sidata);
-	ulong memdata = (ulong)(&_sdata);
-	ulong enddata = (ulong)(&_edata);
+void memcpy_aligned(ulong *dst, const ulong *src, ulong words) {
+	while (words--)
+		*dst++ = *src++;
+}
 
-	while (memdata < enddata) {
-		write32(memdata, read32(flashdata));
-		memdata += 4;
-		flashdata += 4;
-	}
+void memclr_aligned(ulong *start, ulong words) {
+	while (words--)
+		*start++ = 0;
+}
+
+static void setup_data(void) {
+	memcpy_aligned(&_sdata, &_sidata, &_edata - &_sdata);
 }
 
 static void setup_bss(void) {
-	ulong bss_start = (ulong)(&_sbss);
-	ulong bss_end = (ulong)(&_ebss);
-	while (bss_start != bss_end) {
-		write32(bss_start, 0);
-		bss_start += 4;
-	}
+	memclr_aligned(&_sbss, &_ebss - &_sbss);
 }
 
 void reset_entry(void) {
-	/* clear the bss section */
 	setup_bss();
 	setup_data();
-
 
 	/* kill any stray interrupts */
 	irq_clear_pending();
@@ -67,23 +62,6 @@ void empty_handler(void) {
 	while (1) ;
 }
 
-#define SCB_ACTLR 0xE000E008   /* implementation-defined "auxilliary control register */
-#define SCB_CPUID 0xE000ED00 /* CPUID base register */
-#define SCB_ICSR  0xE000ED04 /* interrupt control state register */
-#define SCB_VTOR  0xE000ED08 /* vector table offset register */
-#define SCB_AIRCR 0xE000ED0C /* application interrupt and reset control register */
-#define SCB_SCR   0xE000ED10 /* system control register */
-#define SCB_CCR   0xE000ED14 /* configuration and control register */
-#define SCB_SHPR2 0xE000ED1C /* system handler priority register 2 */
-#define SCB_SHPR3 0xE000ED20 /* system handler priority register 3 */
-#define SCB_SHCSR 0xE000ED24 /* system handler control and stat register */
-#define SCB_DFSR  0xE000ED30 /* debug fault status register */
-
-/* relocate the vector table to a different address */
-void set_vtor(ulong addr) {
-	write32(SCB_VTOR, addr);
-}
-
 void reboot(void) {
 	/* VECTKEY must always be 0x05fa */
 	ulong word = ((ulong)0x05fa << 16) | (1 << 2);
@@ -92,10 +70,6 @@ void reboot(void) {
 }
 
 /* SysTick registers */
-#define SYST_CSR   0xE000E010  /* control and status register */
-#define SYST_RVR   0xE000E014  /* reload value register */
-#define SYST_CVR   0xE000E018  /* current value register */
-#define SYST_CALIB 0xE000E01C  /* implementation-defined calibration register */
 
 #define TICK_MASK (((ulong)1 << 24) - 1)
 
@@ -109,27 +83,25 @@ static bool systick_pending(void) {
 }
 */
 
+ulong getcycles(void) {
+	ulong val = read32(SYST_CVR)&TICK_MASK;
+	return systicks*100 + val;
+}
+
 static void systick_setup(void) {
-	/* the mfg. can specify a calibration value for 10ms ticks */
-	ulong tenms = read32(SYST_CALIB)&TICK_MASK;
-	if (tenms == 0)
-		tenms = CPU_HZ/100;
+	/* TODO: the mfg. can specify a
+	 * calibration value for 10ms ticks */
+	ulong tenms = CPU_HZ/100;
 
 	/* set systick priority to 0 (highest) */
 	write32(SCB_SHPR3, 0);
 	/* clear the current systick value (if any) */
 	write32(SYST_CVR, 0);
-	/* set the reset value to 1ms */
-	write32(SYST_RVR, tenms / 10);
+	/* set the reset value to 10ms */
+	write32(SYST_RVR, tenms);
 	/* enable systick interrupts; enable systick */
 	write32(SYST_CSR, 3);
 }
-
-#define NVIC_ISER 0xE000E100 /* interrupt set-enable register */
-#define NVIC_ICER 0xE000E180 /* interrupt clear-enable register */
-#define NVIC_ISPR 0xE000E200 /* interrupt set-pending register */
-#define NVIC_ICPR 0xE000E280 /* interrupt clear-pending register */
-#define NVIC_IPR0 0xE000E400 /* interrupt priority register base */
 
 #define set_bit(reg, n) write32(reg, read32(reg) | ((ulong)1 << (n)));
 
@@ -145,7 +117,6 @@ bool irq_num_is_enabled(unsigned n) {
 	return (read32(NVIC_ISER)&(1 << n)) != 0;
 }
 
-/* clear all pending interrupts */
 void irq_clear_pending(void) {
 	write32(NVIC_ICPR, ~(ulong)0);
 }

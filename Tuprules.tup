@@ -3,11 +3,10 @@
 ROOT = $(TUP_CWD)
 CC = @(CC)
 LD = @(LD)
-AR = @(AR)
 AS = @(AS)
 OBJCOPY = @(OBJCOPY)
 
-CFLAGS += -Wall -Werror -Os @(CFLAGS)
+CFLAGS += -Wall -Werror -std=c11 @(CFLAGS)
 LDFLAGS += @(LDFLAGS)
 INCLUDES += -I$(ROOT)/include @(INCLUDES)
 
