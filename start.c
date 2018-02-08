@@ -1,5 +1,6 @@
 #include <arch.h>
+#include <bh.h>
 
 void start(void) {
-	while (1) ;
+	idle_loop();
 }

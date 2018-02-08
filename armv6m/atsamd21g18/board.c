@@ -1,4 +1,5 @@
 #include <arch.h>
+#include "board.h"
 
 #define stub __attribute__((weak, alias("empty_irq_handler")))
 
@@ -90,15 +91,6 @@ stub void ptc_irq_entry(void);
 /* irq 27 */
 stub void i2s_irq_entry(void);
 
-#define SYSCTRL_INTENCLR 0x40000800U /* interrupt enable clear register */
-#define SYSCTRL_INTENSET 0x40000804U /* interrupt enable set register */
-#define SYSCTRL_PCLKSR   0x4000080CU /* power and clock status register */
-#define SYSCTRL_INTFLAG  0x40000808U /* interrupt flag status */
-#define SYSCTRL_OSC8M    0x40000820U /* 8MHz oscillator control */
-#define SYSCTRL_DFLLCTRL 0x40000824U /* DFLL control */
-#define SYSCTRL_DFLLVAL  0x40000828U /* DFLL calibration value */
-#define SYSCTRL_DFLLMUL  0x4000082CU /* DFLL clock multiplier */
-
 #define or_bit(val, bit) val |= (1UL << (bit));
 
 #define clear_bits(val, start, end) val &= ~mask((start), (end)-(start))
@@ -114,42 +106,41 @@ stub void i2s_irq_entry(void);
 /* calibrate DFLL based on factory calibration
  * data present in the NVM calibration space */
 static void dfll_calibrate(void) {
-	ulong coarse, fine, reg;
-
-	coarse = read32(0x080624UL) >> 26;
-	fine = read32(0x080628UL) & mask(0, 10);
-
-	/* DFLLVAL[0:9] = fine; DFLLVAL[10:15] = coarse */
-	reg = read32(SYSCTRL_DFLLVAL);
-	set_bits(reg, 0, 16, fine|(coarse<<10));
-	write32(SYSCTRL_DFLLVAL, reg);
+	ulong coarse = read32(0x080624UL) >> 26;
+	ulong fine = read32(0x080628UL) & mask(0, 10);
 
 	/* low 16 bits of DFLLMUL are clock multiplier */
-	reg = read32(SYSCTRL_DFLLMUL);
-	set_bits(reg, 0, 16, 48000);
-	write32(SYSCTRL_DFLLMUL, reg);
+	write32(SYSCTRL_DFLLMUL, 48000);
+
+	/* DFLLVAL[0:9] = fine; DFLLVAL[10:15] = coarse */
+	write32(SYSCTRL_DFLLVAL, fine|(coarse<<10));
 }
 
 static void dfll_disable(void) {
-	write32(SYSCTRL_DFLLCTRL, 0); /* Errata 9905 */
-	while (read32(SYSCTRL_PCLKSR)&(1 << 4)) ;
+	write16(SYSCTRL_DFLLCTRL, 0); /* Errata 9905 */
+	while (read32(SYSCTRL_PCLKSR)&(1 << 4));
 }
 
 static void dfll_enable(void) {
-	/* enable all the things (but no the clock, yet) */
-	ulong reg = read32(SYSCTRL_DFLLCTRL);
 	/* bit 1: enable
 	 * bit 3: stable: FINE calibration register value will be fixed
 	 * bit 5: usbcrm: usb clock recovery mode enable
 	 * bit 8: ccdis: chill cycle disable
 	 * bit 10: bplckc: bypass coarse lock procedure  */
-	reg |= 0b10100101010;
-	write32(SYSCTRL_DFLLCTRL, reg);
-	while (read32(SYSCTRL_PCLKSR)&(1 << 4)) ;
+	ushort reg = 0b10100101010;
+	write16(SYSCTRL_DFLLCTRL, reg);
+	while (read32(SYSCTRL_PCLKSR)&(1 << 4));
 }
 
 static void go_to_48mhz(void) {
-
+	/* set clock 0 source to DFLL48MHz */
+	ulong reg = 0;
+	reg |= 1UL<<21; /* RUNSTDBY: run in standby */
+	reg |= 1UL<<16; /* CLKEN: enable */
+	reg |= 7UL<<8;  /* SRC: DFLL48M */
+	/* bits 0:3 = 0: GCLKGEN0 */
+	write32(GCLK_GENCTRL, reg);
+	while (read8(GCLK_STATUS)&(1 << 7));
 }
 
 void board_setup(void) {

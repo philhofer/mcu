@@ -1,4 +1,5 @@
 #include <config.h>
+#include <bh.h>
 #include <arch.h>
 #include <bits.h>
 
@@ -10,7 +11,6 @@ void systick_entry(void);
 stub void svcall_entry(void);
 stub void pendsv_entry(void);
 stub void nmi_entry(void);
-stub void hardfault_entry(void);
 
 extern void start(void);
 extern void board_setup(void);
@@ -56,6 +56,11 @@ void reset_entry(void) {
 	start();
 	reboot();
 	while (1) ;
+}
+
+void hardfault_entry(void) {
+	/* TODO: something else? */
+	reboot();
 }
 
 void empty_handler(void) {

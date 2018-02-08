@@ -11,6 +11,9 @@ source files will be built automatically and linked into your kernel.
 The kernel entry point for all architectures is `start()`. Note that plenty
 of architecture- and device-specific code has executed at this point.
 
+Running `tup` will build your kernel; generally you'll find an ELF image
+(`kernel.elf`) and a raw binary (`kernel.bin`) in the directory of the device target.
+
 ## Navigating the Source
 
 The source tree is organized such that more generic code lives
