@@ -18,23 +18,29 @@ void bh_enqueue_from_irq(struct bh *bh) {
 }
 
 void bh_enqueue(struct bh *bh) {
-	bool inirq = in_irq();
-	if (inirq)
+	bool crit = !in_irq();
+	if (crit)
 		irq_disable();
 	bh_enqueue_from_irq(bh);
-	if (inirq)
+	if (crit)
 		irq_enable();
 }
 
-static struct bh *pop(void) {
+static struct bh *__pop(void) {
 	struct bh *head;
-	irq_disable();
 	head = bh_head;
 	if (head) {
 		head->status = 0;
 		if ((bh_head = head->next) == NULL)
 			bh_tail = NULL;
 	}
+	return head;
+}
+
+static struct bh *pop(void) {
+	struct bh *head;
+	irq_disable();
+	head = __pop();
 	irq_enable();
 	return head;
 }
@@ -42,12 +48,8 @@ static struct bh *pop(void) {
 static struct bh *pop_or_idle(void) {
 	struct bh *bh;
 	irq_disable();
-	while (bh_head == NULL)
-		arch_wfi();
-	bh = bh_head;
-	bh->status = 0;
-	if ((bh_head = bh->next) == NULL)
-		bh_tail = NULL;
+	while ((bh = __pop()) == NULL)
+		cpu_idle_hint();
 	irq_enable();
 	return bh;
 }

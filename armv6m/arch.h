@@ -112,25 +112,36 @@ static inline void arch_wfi(void) {
 		);
 }
 
+static inline void arch_dsb(void) {
+	__asm__ volatile (
+		"dsb \n\t"
+		:
+		:
+		: "memory", "cc"
+		);
+}
+
+static inline void arch_isb(void) {
+	__asm__ volatile (
+		"isb \n\t"
+		:
+		:
+		: "memory", "cc"
+		);
+}
+
 static inline bool in_irq(void) {
 	return irq_number() != 0;
 }
+
+/* for armv6-m, just issue a wfi when the cpu is idle */
+#define cpu_idle_hint() arch_wfi()
 
 /* irq_disable_num() disables irq number 'n' */
 void irq_disable_num(unsigned n);
 
 /* irq_enable_num() enables irq number 'n' */
 void irq_enable_num(unsigned n);
-
-/* irq_set_priority() sets the priority of irq 'n'
- * Valid priorities are 0-3, inclusive, with lower
- * priorities being served first. */
-void irq_set_priority(unsigned n, unsigned prio);
-
-/* irq_get_priority() gets the priority of irq 'n'
- * Valid priorities are 0-3, inlusive, with lower
- * priorities being served first. */
-unsigned irq_get_priority(unsigned n);
 
 /* irq_num_is_enabled() returns whether or not
  * irq 'n' is enabled. */

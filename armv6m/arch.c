@@ -116,31 +116,20 @@ void irq_enable_num(unsigned n) {
 
 void irq_disable_num(unsigned n) {
 	set_bit(NVIC_ICER, n);
+	arch_dsb();
+	arch_isb();
 }
 
 bool irq_num_is_enabled(unsigned n) {
 	return (read32(NVIC_ISER)&(1 << n)) != 0;
 }
 
+bool irq_num_is_pending(unsigned n) {
+	return (read32(NVIC_ISPR)&(1 << n)) != 0;
+}
+
 void irq_clear_pending(void) {
 	write32(NVIC_ICPR, ~(ulong)0);
-}
-
-void irq_set_priority(unsigned num, unsigned prio) {
-	if (prio > 3 || num >= NUM_IRQ)
-		return;
-	/* there are 8 NVIC_IPRn registers, each with 4 priorities */
-	ulong val = read32(NVIC_IPR0 + num);
-	ulong shift = 6 + 8 * (num % 4);
-	val &= ~(3 << shift);
-	val |= (prio << shift);
-	write32(NVIC_IPR0 + num, val);
-}
-
-unsigned irq_get_priority(unsigned num) {
-	if (num >= NUM_IRQ)
-		return 0;
-	ulong val = read32(NVIC_IPR0 + num);
-	ulong shift = 6 + 8 * (num % 4);
-	return (val & (3 << shift)) >> shift;
+	arch_dsb();
+	arch_isb();
 }
