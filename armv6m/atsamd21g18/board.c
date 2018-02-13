@@ -1,10 +1,13 @@
 #include <arch.h>
+#include <softirq.h>
 #include "board.h"
 
-#define stub __attribute__((weak, alias("empty_irq_handler")))
+#define stub __attribute__((weak, alias("default_handler")))
 
-void empty_irq_handler(void) {
-	return;
+void default_handler(void) {
+	unsigned n = irq_number();
+	irq_disable_num(n);
+	softirq_trigger_from_irq(n);
 }
 
 /* irq 0 */

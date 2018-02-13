@@ -16,6 +16,10 @@ SECTIONS {
 		*(.rodata)
 		*(.rodata*)
 		. = ALIGN(4);
+		_ssoftirq = .;
+		*(.softirq)
+		_esoftirq = .;
+		. = ALIGN(4);
 		_etext = .;
 	 } >FLASH
 

@@ -9,35 +9,35 @@ cat <<EOF
     .thumb
     .pushsection .vector_table
     .word @STACK_TOP@
-    .word reset_entry
-    .word nmi_entry
-    .word hardfault_entry
+    .word reset_entry+1
+    .word nmi_entry+1
+    .word hardfault_entry+1
 EOF
 
 for i in $(seq 5 10); do
     cat <<EOF
-    .word fatal0
+    .word fatal0+1
 EOF
 done
 
 cat <<EOF
-    .word svcall_entry
+    .word svcall_entry+1
 EOF
 
 for i in $(seq 12 13); do
     cat <<EOF
-    .word fatal0
+    .word fatal0+1
 EOF
 done
 
 cat <<EOF
-    .word pendsv_entry
-    .word systick_entry
+    .word pendsv_entry+1
+    .word systick_entry+1
 EOF
 
-for i in $(seq $NUM_IRQ); do
+for i in $(seq 0 $(echo "$NUM_IRQ-1" | bc)); do
     cat<<EOF
-    .word @IRQ${i}@
+    .word @IRQ${i}@+1
 EOF
 done
 

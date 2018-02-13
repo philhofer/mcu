@@ -1,5 +1,5 @@
 #include <config.h>
-#include <bh.h>
+#include <softirq.h>
 #include <arch.h>
 #include <bits.h>
 
