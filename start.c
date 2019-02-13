@@ -1,12 +1,9 @@
 #include <arch.h>
-#include <softirq.h>
+#include <idle.h>
 
-static void do_nothing(void) {
-	/* wheeeee */
-}
-
-softirq_decl(5, SOFTIRQ_REENABLE, do_nothing);
-
-void start(void) {
-	idle_loop();
+void
+start(void)
+{
+	for (;;)
+		idle_step(true);
 }

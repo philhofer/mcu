@@ -88,11 +88,7 @@ static inline void write8(ulong addr, uchar val) {
 		);
 }
 
-/* irq_number() returns the number of the
- * current irq number, provided that the
- * code is executing in irq context. Otherwise,
- * zero is returned. */
-static inline unsigned irq_number(void) {
+static inline unsigned arch_exception_number(void) {
 	ulong ipsr;
 	__asm__ volatile (
 		"mrs %0, ipsr \n\t"
@@ -101,6 +97,17 @@ static inline unsigned irq_number(void) {
 		: "memory", "cc"
 		);
 	return ipsr & 0x1f;
+}
+
+/* irq_number() returns the number of the
+ * current irq number, provided that the
+ * code is executing in irq context. Otherwise,
+ * -1 is returned. */
+static inline int irq_number(void) {
+	unsigned n = arch_exception_number();
+	if (n < 16)
+		return -1;
+	return (int)(n - 16);
 }
 
 static inline void arch_wfi(void) {
@@ -131,7 +138,7 @@ static inline void arch_isb(void) {
 }
 
 static inline bool in_irq(void) {
-	return irq_number() != 0;
+	return arch_exception_number() != 0;
 }
 
 /* for armv6-m, just issue a wfi when the cpu is idle */
@@ -147,8 +154,18 @@ void irq_enable_num(unsigned n);
  * irq 'n' is enabled. */
 bool irq_num_is_enabled(unsigned n);
 
-/* irq_clear_pending() clears all pending interrupts */
-void irq_clear_pending(void);
+/* irq_clear_pending() clears a pending interrupt */
+void irq_clear_pending(unsigned n);
+
+/* irq_set_pending() raises a pending interrupt */
+void irq_set_pending(unsigned n);
+
+/* irq_next_pending() returns the lowest-numbered
+ * pending interrupt, or -1 if no interrupts are pending. */
+int irq_next_pending(void);
+
+/* irq_clear_all_pending() clears all pending interrupts */
+void irq_clear_all_pending(void);
 
 /* idle() idles the cpu */
 void idle(void);

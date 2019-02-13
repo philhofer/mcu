@@ -14,3 +14,9 @@
 #define GCLK_CLKCTRL 0x40000C02UL /* clock control register (16 bits) */
 #define GCLK_GENCTRL 0x40000C04UL /* clock generator control register */
 #define GCLK_GENDIV  0x40000C08UL /* generator divisor register */
+
+/* sercom_irq(n) returns the irq number for the n'th
+ * SERCOM peripheral controller */
+static inline unsigned sercom_irq(unsigned sercom) {
+	return sercom + 9;
+}

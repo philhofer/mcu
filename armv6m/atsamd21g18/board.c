@@ -1,14 +1,20 @@
 #include <arch.h>
-#include <softirq.h>
+#include <drivers/i2c.h>
 #include "board.h"
 
 #define stub __attribute__((weak, alias("default_handler")))
 
-void default_handler(void) {
-	unsigned n = irq_number();
-	irq_disable_num(n);
-	softirq_trigger_from_irq(n);
+void
+default_handler(void)
+{
+	irq_disable_num(irq_number());
+	return;
 }
+
+extern struct i2c_bus_ops sercom_i2c_bus_ops;
+
+/* i2c bus 0 is sercom1 */
+DECLARE_I2C_BUS(0, &sercom_i2c_bus_ops, 0x42000C00);
 
 /* irq 0 */
 stub void powermgr_irq_entry(void);
@@ -94,23 +100,14 @@ stub void ptc_irq_entry(void);
 /* irq 27 */
 stub void i2s_irq_entry(void);
 
-#define or_bit(val, bit) val |= (1UL << (bit));
-
-#define clear_bits(val, start, end) val &= ~mask((start), (end)-(start))
-
-#define mask(off, width) (((1UL << (width)) - 1) << (off))
-
-#define set_bits(val, start, end, bitval)				\
-	do {								\
-		clear_bits(val, start, end);				\
-		val |= ((bitval) & mask((end)-(start), 0)) << (start);	\
-	} while (0)
-
 /* calibrate DFLL based on factory calibration
  * data present in the NVM calibration space */
-static void dfll_calibrate(void) {
+static void
+dfll_calibrate(void)
+{
+	/* coarse reading is 6 bits; fine is 10 bits */
 	ulong coarse = read32(0x080624UL) >> 26;
-	ulong fine = read32(0x080628UL) & mask(0, 10);
+	ulong fine = read32(0x080628UL) & 0x3ff;
 
 	/* low 16 bits of DFLLMUL are clock multiplier */
 	write32(SYSCTRL_DFLLMUL, 48000);
@@ -119,12 +116,16 @@ static void dfll_calibrate(void) {
 	write32(SYSCTRL_DFLLVAL, fine|(coarse<<10));
 }
 
-static void dfll_disable(void) {
-	write16(SYSCTRL_DFLLCTRL, 0); /* Errata 9905 */
+static void
+dfll_disable(void)
+{
+	write16(SYSCTRL_DFLLCTRL, 0);
 	while (read32(SYSCTRL_PCLKSR)&(1 << 4));
 }
 
-static void dfll_enable(void) {
+static void
+dfll_enable(void)
+{
 	/* bit 1: enable
 	 * bit 3: stable: FINE calibration register value will be fixed
 	 * bit 5: usbcrm: usb clock recovery mode enable
@@ -135,7 +136,9 @@ static void dfll_enable(void) {
 	while (read32(SYSCTRL_PCLKSR)&(1 << 4));
 }
 
-static void go_to_48mhz(void) {
+static void
+go_to_48mhz(void)
+{
 	/* set clock 0 source to DFLL48MHz */
 	ulong reg = 0;
 	reg |= 1UL<<21; /* RUNSTDBY: run in standby */
@@ -146,12 +149,14 @@ static void go_to_48mhz(void) {
 	while (read8(GCLK_STATUS)&(1 << 7));
 }
 
-void board_setup(void) {
+void
+board_setup(void)
+{
 	ulong reg;
 
 	/* set OSC8M prescaler (bits 8:9) to 0 */
 	reg = read32(SYSCTRL_OSC8M);
-	clear_bits(reg, 8, 10);
+	reg &= ~(3UL << 8);
 	write32(SYSCTRL_OSC8M, reg);
 
 	/* Errata 9905: calibrating the DFLL clock with

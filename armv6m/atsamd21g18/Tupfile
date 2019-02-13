@@ -1,8 +1,0 @@
-include_rules
-
-: foreach *.inc |> tup varsed %f %o |> %B
-: foreach *.c | *.h $(ROOT)/*.h $(ROOT)/@(ARCH)/*.h |> !cc |>
-: foreach *.s |> !as |>
-
-: *.o $(ROOT)/@(ARCH)/*.o $(ROOT)/*.o | board.ld |> $(LD) -T board.ld $(LDFLAGS) %f -lgcc -o %o |> kernel.elf
-: kernel.elf |> $(OBJCOPY) -Obinary kernel.elf %o |> kernel.bin

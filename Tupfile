@@ -1,5 +1,0 @@
-include_rules
-
-: foreach *.inc |> tup varsed %f %o |> %B
-: foreach *.c | *.h |> !cc |> {objects}
-: foreach *.s |> !as |> {objects}
