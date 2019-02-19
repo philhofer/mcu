@@ -1,5 +1,7 @@
 #ifndef __MKAL_BUFFER_H_
 #define __MKAL_BUFFER_H_
+#include <bits.h>
+#include <assert.h>
 
 enum iodir {
 	IO_OUT = 0,
@@ -34,12 +36,12 @@ static inline bool buf_ateof(const struct mbuf *buf) {
 }
 
 static inline uchar buf_getc(struct mbuf *buf) {
-	/* TODO: assert(buf->dir == IO_OUT) */
+	assert(buf->dir == IO_OUT);
 	return *buf->cur++;
 }
 
 static inline void buf_putc(struct mbuf *buf, uchar byte) {
-	/* TODO: assert(buf->dir == IO_IN) */
+	assert(buf->dir == IO_IN);
 	*buf->cur++ = byte;
 }
 

@@ -2,6 +2,23 @@
 #define __SERCOM_DEF_H_
 #include <bits.h>
 
+struct sercom_config {
+	ulong     base;      /* actual base address of the peripheral */
+	u8        apb_index; /* index within this device's APB (used for PAC and PM) */
+	u8        gclk;      /* GCLK that needs to be enabled */
+#ifdef SAM_VECTORED_IRQ
+	u8        irq_base;
+	u8        irq_mask;
+#else
+	u8        irq;
+#endif
+	uchar     pingrp;    /* pin group */
+	uchar     pinrole;   /* pin role for SERCOM operation */
+	uchar     pins[4];   /* actual pins (in PAD order) */
+};
+
+extern const struct sercom_config sercoms[];
+
 /* CTRLA register fields used across SERCOM modes */
 #define CTRLA_SWRST   0x1
 #define CTRLA_ENABLE  0x2
@@ -49,9 +66,18 @@ sercom_syncbusy(const sercom_t sc)
 /* sercom_reset() resets a sercom module */
 void sercom_reset(const sercom_t sc);
 
+/* sercom_setup(n) assigns a clock generator to the sercom clock
+ * and unmasks the peripheral in the APBx */
+int sercom_setup(unsigned n);
+
 /* sercom_enable() sets the enable bit on
  * the sercom module and waits for clock
  * synchronization */
 void sercom_enable(const sercom_t sc);
+
+/* create an I2C master bus with sercom 'n' */
+#define SERCOM_CLAIM_I2C_MASTER(bus, n) \
+	void sercom##n##_irq_entry(void) { sercom_i2c_master_irq(&sercoms[n]); } \
+	DECLARE_I2C_BUS(bus, &sercom_i2c_bus_ops, &sercoms[n])
 
 #endif

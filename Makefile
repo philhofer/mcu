@@ -8,11 +8,16 @@ boarddir=$(rootdir)/$(CONFIG_ARCH)/$(CONFIG_BOARD)
 include $(archdir)/arch.mk
 include $(boarddir)/board.mk
 
-CFLAGS += -Wall -I$(rootdir) -I$(archdir) -I$(boarddir)
+CFLAGS += -Wall -ggdb -I$(rootdir) -I$(archdir) -I$(boarddir)
 
 objects += idle.o start.o libc.o
+
 ifeq ($(CONFIG_I2C), y)
 	objects += i2c.o
+endif
+
+ifeq ($(CONFIG_GPIO), y)
+	objects += gpio.o
 endif
 
 headers += config.h
@@ -32,6 +37,7 @@ headers += config.h
 %.elf: $(objects) | $(boarddir)/board.ld
 	@echo "LD $@"
 	@$(LD) $(LDFLAGS) -T $| -o $@ $^ -lgcc
+	@chmod -x $@
 
 %.h: %.h.inc
 	@echo "CONF $@"

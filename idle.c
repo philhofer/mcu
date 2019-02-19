@@ -38,7 +38,9 @@ schedule_work(struct work *work)
 	if (!in_irq())
 		irq_disable();
 
-	workq_push(&global, work);
+	/* don't schedule more than once */
+	if (!work->next && work != global.tail)
+		workq_push(&global, work);
 
 	if (!in_irq())
 		irq_enable();

@@ -9,7 +9,9 @@
 void reboot(void);
 
 /* disable all interrupt sources */
-static inline void irq_disable(void) {
+static inline void
+irq_disable(void)
+{
 	__asm__ volatile (
 		"cpsid i \n\t"
 		:
@@ -19,7 +21,9 @@ static inline void irq_disable(void) {
 }
 
 /* enable all interrupt sources */
-static inline void irq_enable(void) {
+static inline void
+irq_enable(void)
+{
 	__asm__ volatile (
 		"cpsie i \n\t"
 		:
@@ -28,7 +32,22 @@ static inline void irq_enable(void) {
 		);
 }
 
-static inline ulong read32(ulong addr) {
+static inline bool
+irq_enabled(void)
+{
+	ulong out;
+	__asm__ volatile (
+		"mrs %0, primask \n\t"
+		: "=r"(out)
+		:
+		: "memory"
+		);
+	return (bool)(out&1);
+}
+
+static inline ulong
+read32(ulong addr)
+{
 	ulong out;
 	__asm__ volatile (
 		"ldr %0, [%1] \n\t"
@@ -39,29 +58,35 @@ static inline ulong read32(ulong addr) {
 	return out;
 }
 
-static inline ushort read16(ulong addr) {
+static inline ushort
+read16(ulong addr)
+{
 	ushort out;
 	__asm__ volatile (
 		"ldrh %0, [%1] \n\t"
-		: "=r"(out)
+		: "=l"(out)
 		: "r"(addr)
 		: "memory"
 		);
 	return out;
 }
 
-static inline uchar read8(ulong addr) {
+static inline uchar
+read8(ulong addr)
+{
 	uchar out;
 	__asm__ volatile (
 		"ldrb %0, [%1] \n\t"
-		: "=r"(out)
+		: "=l"(out)
 		: "r"(addr)
 		: "memory"
 		);
 	return out;
 }
 
-static inline void write32(ulong addr, ulong val) {
+static inline void
+write32(ulong addr, ulong val)
+{
 	__asm__ volatile (
 		"str %0, [%1] \n\t"
 		:
@@ -70,25 +95,31 @@ static inline void write32(ulong addr, ulong val) {
 		);
 }
 
-static inline void write16(ulong addr, ushort val) {
+static inline void
+write16(ulong addr, ushort val)
+{
 	__asm__ volatile (
 		"strh %0, [%1] \n\t"
 		:
-		: "r"(val), "r"(addr)
+		: "l"(val), "r"(addr)
 		: "memory"
 		);
 }
 
-static inline void write8(ulong addr, uchar val) {
+static inline void
+write8(ulong addr, uchar val)
+{
 	__asm__ volatile (
 		"strb %0, [%1] \n\t"
 		:
-		: "r"(val), "r"(addr)
+		: "l"(val), "r"(addr)
 		: "memory"
 		);
 }
 
-static inline unsigned arch_exception_number(void) {
+static inline unsigned
+arch_exception_number(void)
+{
 	ulong ipsr;
 	__asm__ volatile (
 		"mrs %0, ipsr \n\t"
@@ -103,14 +134,18 @@ static inline unsigned arch_exception_number(void) {
  * current irq number, provided that the
  * code is executing in irq context. Otherwise,
  * -1 is returned. */
-static inline int irq_number(void) {
+static inline int 
+irq_number(void)
+{
 	unsigned n = arch_exception_number();
 	if (n < 16)
 		return -1;
 	return (int)(n - 16);
 }
 
-static inline void arch_wfi(void) {
+static inline void
+arch_wfi(void)
+{
 	__asm__ volatile (
 		"wfi \n\t"
 		:
@@ -119,7 +154,9 @@ static inline void arch_wfi(void) {
 		);
 }
 
-static inline void arch_dsb(void) {
+static inline void
+arch_dsb(void)
+{
 	__asm__ volatile (
 		"dsb \n\t"
 		:
@@ -128,12 +165,25 @@ static inline void arch_dsb(void) {
 		);
 }
 
-static inline void arch_isb(void) {
+static inline void
+arch_isb(void)
+{
 	__asm__ volatile (
 		"isb \n\t"
 		:
 		:
 		: "memory", "cc"
+		);
+}
+
+static inline void
+bkpt(void)
+{
+	__asm__ volatile (
+		"bkpt \n\t"
+		:
+		:
+		: "memory"
 		);
 }
 
@@ -170,32 +220,11 @@ void irq_clear_all_pending(void);
 /* idle() idles the cpu */
 void idle(void);
 
-/* begin non-portable declarations and definitions */
-
-/* system control block registers */
-#define SCB_ACTLR 0xE000E008UL /* implementation-defined "auxilliary control register */
-#define SCB_CPUID 0xE000ED00UL /* CPUID base register */
-#define SCB_ICSR  0xE000ED04UL /* interrupt control state register */
-#define SCB_VTOR  0xE000ED08UL /* vector table offset register */
-#define SCB_AIRCR 0xE000ED0CUL /* application interrupt and reset control register */
-#define SCB_SCR   0xE000ED10UL /* system control register */
-#define SCB_CCR   0xE000ED14UL /* configuration and control register */
-#define SCB_SHPR2 0xE000ED1CUL /* system handler priority register 2 */
-#define SCB_SHPR3 0xE000ED20UL /* system handler priority register 3 */
-#define SCB_SHCSR 0xE000ED24UL /* system handler control and stat register */
-#define SCB_DFSR  0xE000ED30UL /* debug fault status register */
-
-/* SysTick registers */
-#define SYST_CSR   0xE000E010UL  /* control and status register */
-#define SYST_RVR   0xE000E014UL  /* reload value register */
-#define SYST_CVR   0xE000E018UL  /* current value register */
-#define SYST_CALIB 0xE000E01CUL  /* implementation-defined calibration register */
-
-/* NVIC registers */
-#define NVIC_ISER 0xE000E100UL /* interrupt set-enable register */
-#define NVIC_ICER 0xE000E180UL /* interrupt clear-enable register */
-#define NVIC_ISPR 0xE000E200UL /* interrupt set-pending register */
-#define NVIC_ICPR 0xE000E280UL /* interrupt clear-pending register */
-#define NVIC_IPR0 0xE000E400UL /* interrupt priority register base */
+/* getcycles() provides access to the CPU's
+ * cycle counter. Note that changes in the CPU's
+ * core clock and clock jitter mean that this isn't
+ * a terribly good time-keeping tool, but it is
+ * a monotonic time source. */
+u64 getcycles(void);
 
 #endif

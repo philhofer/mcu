@@ -1,0 +1,12 @@
+This is the collection of drivers necessary for
+peripheral interoperation with Microchip/Atmel SAM
+series microcontrollers.
+
+Common development platforms include the
+SAMD21G18 (armv6m, 48MHz: Arduino Zero, Adafruit Feather M0) and
+SAMD51J18 (armv7m, 120MHz, FP: Arduino Metro M4, Adafruit Feather M4).
+
+These drivers were developed using the following spec sheets:
+
+ - SAMD21: http://ww1.microchip.com/downloads/en/DeviceDoc/SAMD21-Family-DataSheet-DS40001882D.pdf
+

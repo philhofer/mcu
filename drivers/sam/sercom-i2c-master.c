@@ -1,6 +1,8 @@
 #include <arch.h>
 #include <bits.h>
 #include <error.h>
+#include <config.h>
+#include <i2c.h>
 #include <drivers/i2c.h>
 #include "sercom.h"
 
@@ -49,19 +51,10 @@ enum bus_state {
 #define INT_SB  (1UL << 1) /* slave-on-bus enable/disable/flag */
 #define INT_ERR (1UL << 7) /* error interrupt enable/disable/flag */
 
-/* type of opaque 'driver' pointer */
-struct sercom_i2c_config {
-	sercom_t base;
-	ulong    baud;
-	u8       pad0;
-	u8       pad1;
-	u8       irq;
-};
-
-static inline struct sercom_i2c_config *
-bus_config(struct i2c_bus *bus)
+static inline const struct sercom_config *
+dev_config(struct i2c_dev *dev)
 {
-	return (struct sercom_i2c_config *)bus->driver;
+	return (const struct sercom_config *)dev->driver;
 }
 
 /* INTENCLR:8 disables the INT_* interrupts when written to */
@@ -86,18 +79,18 @@ intflag_reg(const sercom_t sc)
 }
 
 static void
-bus_disable_irq(struct i2c_bus *bus)
+dev_disable_irq(struct i2c_dev *dev)
 {
-	struct sercom_i2c_config *conf = bus_config(bus);
+	const struct sercom_config *conf = dev_config(dev);
 
 	write8(intenclr_reg(conf->base), INT_ERR|INT_SB|INT_MB);
 	irq_disable_num(conf->irq);
 }
 
 static void
-bus_enable_irq(struct i2c_bus *bus)
+dev_enable_irq(struct i2c_dev *dev)
 {
-	struct sercom_i2c_config *conf = bus_config(bus);
+	const struct sercom_config *conf = dev_config(dev);
 
 	write8(intenset_reg(conf->base), INT_ERR|INT_SB|INT_MB);
 	irq_enable_num(conf->irq);
@@ -132,20 +125,6 @@ data_reg(const sercom_t sc)
 }
 
 static void
-set_baud(const sercom_t sc, u8 baud, u8 baudlo, u8 hsbaud, u8 hsbaudlo)
-{
-	u32 rv = 0;
-	ulong reg = baud_reg(sc);
-
-	rv = (u32)baud;
-	rv |= (u32)baudlo << 8;
-	rv |= (u32)hsbaud << 16;
-	rv |= (u32)hsbaudlo << 24;
-
-	write32(reg, rv);
-}
-
-static void
 opwait(const sercom_t sc)
 {
 	while (read32(sercom_syncbusy(sc))&SYNC_SYSOP) ;
@@ -170,11 +149,67 @@ status_err(u16 status)
 	return 0;
 }
 
+/* rise times, in nanoseconds,
+ * of the bus given the configuration
+ * see table 37-69 in Electrical Characteristics
+ * in the datasheet */
+#define RISE_TIME_SLOW 230 /* assuming Cb = 400pF */
+#define RISE_TIME_FAST 60  /* assuminb Cb = 500pF */
+#define RISE_TIME_HSM  30  /* assuming Cb = 100pF */
+
+/* fSCL = fGCLK / (10 + 2*baud + fGCLK * rT)
+ * therefore
+ * 2*baud = (fGCLK/fSCL) - (fGCLK * rT) - 10 */
+static inline int
+baud_period(ulong core, ulong rise, ulong target)
+{
+	/* n.b.: we pre-scale the core speed here so that
+	 * it's less likely that the rise time times the
+	 * core clock leads to an overflow */
+	return (core/target) - (((core/1000)*rise)/1e6) - 10;
+}
+
+/* FIXME: this isn't true if someone has gone
+ * and mucked with GCLK_MAIN, which uses
+ * the same clock generator that we point at
+ * the sercom devices by default... */
+#define get_core_clock() CPU_HZ
+
+static u32
+calc_baud(struct i2c_dev *dev, unsigned speed)
+{
+	u32 reg = 0;
+
+	/* TODO: add error handling for higher speeds here;
+	 * the theoretical limit to the baud rate generator
+	 * is GCLK divided by ten, so there are speeds that
+	 * we may not be able to generate in certain clock
+	 * configurations */
+	switch (speed) {
+	case I2C_SPEED_NORMAL:
+		reg = (u8)(baud_period(get_core_clock(), RISE_TIME_SLOW, 100000))/2;
+		break;
+	case I2C_SPEED_FULL:
+		reg = (u8)(baud_period(get_core_clock(), RISE_TIME_SLOW, 400000))/2;
+		break;
+	case I2C_SPEED_FAST:
+		/* TODO */
+		break;
+	case I2C_SPEED_HIGH:
+		/* TODO */
+		break;
+	}
+	return reg;
+}
+
 static int
-sercom_i2c_init(struct i2c_bus *bus)
+sercom_i2c_init(struct i2c_dev *dev, int flags)
 {
 	u32 reg;
-	sercom_t sc = bus_config(bus)->base;
+	sercom_t sc = dev_config(dev)->base;
+
+	if (dev->tx.status != I2C_STATUS_NONE)
+		return -EAGAIN;
 
 	sercom_reset(sc);
 
@@ -194,10 +229,11 @@ sercom_i2c_init(struct i2c_bus *bus)
 	reg |= SERCOM_I2C_MASTER;
 	write32(sercom_ctrla(sc), reg);
 
-	/* TODO: set up pins/ports for 10k or 2.2k pull-up */
 	/* TODO: support baud rates other than 100kHz and 400kHz */
-	/* TODO: set config->baud */
-	set_baud(sc, 0, 0, 0, 0);
+	reg = calc_baud(dev, flags&3);
+	if (!reg)
+		return -EOPNOTSUPP;
+	write32(baud_reg(sc), reg);
 	
 	sercom_enable(sc);
 
@@ -210,17 +246,17 @@ sercom_i2c_init(struct i2c_bus *bus)
 
 /* driver start() routine */
 static int
-sercom_i2c_start(struct i2c_bus *bus, i8 addr, struct mbuf *bufs, int nbufs, void (*done)(int, void *), void *uctx)
+sercom_i2c_start(struct i2c_dev *dev, i8 addr, struct mbuf *bufs, int nbufs, void (*done)(int, void *), void *uctx)
 {
-	sercom_t sc = bus_config(bus)->base;
+	sercom_t sc = dev_config(dev)->base;
 
 	/* bus must be available */
-	if (bus->tx.status != I2C_STATUS_NONE || read16(status_reg(sc)) != BUS_IDLE)
+	if (dev->tx.status != I2C_STATUS_NONE || read16(status_reg(sc)) != BUS_IDLE)
 		return -EAGAIN;
 	if (nbufs == 0)
 		return 0;
 
-	bus->tx.status = I2C_STATUS_MASTER;
+	dev->tx.status = I2C_STATUS_MASTER;
 
 	/* low bit of ADDR reg indicates read;
 	 * see if we get an ACK or NACK from sending
@@ -232,12 +268,12 @@ sercom_i2c_start(struct i2c_bus *bus, i8 addr, struct mbuf *bufs, int nbufs, voi
 	 * arranged before enabling interrupts; otherwise
 	 * an early interrupt arrival would see strange
 	 * internal state */
-	bus->tx.done = done;
-	bus->tx.uctx = uctx;
-	bus->tx.bufs = bufs;
-	bus->tx.nbufs = nbufs;
-	bus->tx.addr = addr;
-	bus_enable_irq(bus);
+	dev->tx.done = done;
+	dev->tx.uctx = uctx;
+	dev->tx.bufs = bufs;
+	dev->tx.nbufs = nbufs;
+	dev->tx.addr = addr;
+	dev_enable_irq(dev);
 	return 0;	
 }
 
@@ -249,20 +285,20 @@ stop(const sercom_t sc)
 }
 
 static void
-tx_complete(struct i2c_bus *bus, int err)
+tx_complete(struct i2c_dev *dev, int err)
 {
-	sercom_t sc = bus_config(bus)->base;
+	sercom_t sc = dev_config(dev)->base;
 	void (*cb)(int, void *);
 	void *uctx;
 
 	if (read16(status_reg(sc))&STATUS_CLKHOLD)
 		stop(sc);
-	bus_disable_irq(bus);
+	dev_disable_irq(dev);
 
-	cb = bus->tx.done;
-	uctx = bus->tx.uctx;
+	cb = dev->tx.done;
+	uctx = dev->tx.uctx;
 
-	bus->tx = (struct i2c_tx){ 0 };
+	dev->tx = (struct i2c_tx){ 0 };
 
 	/* the tx complete callback must be the very last
 	 * thing that happens on completion, because it may
@@ -272,10 +308,10 @@ tx_complete(struct i2c_bus *bus, int err)
 }
 
 /* driver interrupt() routine */
-static void
-sercom_i2c_irq(struct i2c_bus *bus)
+void
+sercom_i2c_irq(struct i2c_dev *dev)
 {
-	sercom_t sc = bus_config(bus)->base;
+	sercom_t sc = dev_config(dev)->base;
 	u16 status;
 	u8 iflags;
 	int err;
@@ -284,51 +320,50 @@ sercom_i2c_irq(struct i2c_bus *bus)
 	status = read16(status_reg(sc));
 
 	/* spurious? */
-	if (iflags == 0 || bus->tx.status == I2C_STATUS_NONE || bus->tx.nbufs == 0)
+	if (iflags == 0 || dev->tx.status == I2C_STATUS_NONE || dev->tx.nbufs == 0)
 		return;
 
-	/* bus error */
+	/* dev error */
 	if (status && (err = status_err(status)) < 0) {
-		tx_complete(bus, err);
+		tx_complete(dev, err);
 		return;
 	}
 
 	/* find the next buffer pointer to send/receive */
-	while (buf_ateof(bus->tx.bufs)) {
-		if (--bus->tx.nbufs == 0) {
+	while (buf_ateof(dev->tx.bufs)) {
+		if (--dev->tx.nbufs == 0) {
 			/* if we were transmitting, then we're done;
 			 * we shouldn't get here in the rx path... */
 			stop(sc);
-			tx_complete(bus, 0);
+			tx_complete(dev, 0);
 			return;
 		}
 		/* if the next buffer isn't going in the same direction as the previous
 		 * one, then we need to generate a repeated start */
-		if (bus->tx.bufs[0].dir != bus->tx.bufs[1].dir) {
-			write16(addr_reg(sc), ((u16)bus->tx.addr << 1) | !!(bus->tx.bufs[1].dir == IO_IN));
-			bus->tx.bufs++;
+		if (dev->tx.bufs[0].dir != dev->tx.bufs[1].dir) {
+			write16(addr_reg(sc), ((u16)dev->tx.addr << 1) | !!(dev->tx.bufs[1].dir == IO_IN));
+			dev->tx.bufs++;
 			opwait(sc);
 			return;
 		}
-		bus->tx.bufs++;
+		dev->tx.bufs++;
 	}
 
-	if ((iflags & INT_MB) && bus->tx.bufs[0].dir == IO_OUT) {
-		write16(data_reg(sc), (u16)buf_getc(bus->tx.bufs));
-	} else if ((iflags & INT_SB) && bus->tx.bufs[0].dir == IO_IN) {
+	if ((iflags & INT_MB) && dev->tx.bufs[0].dir == IO_OUT) {
+		write16(data_reg(sc), (u16)buf_getc(dev->tx.bufs));
+	} else if ((iflags & INT_SB) && dev->tx.bufs[0].dir == IO_IN) {
 		/* if this is the last byte of data, send a NACK when we read it */
-		if (buf_todo(bus->tx.bufs) == 1 && bus->tx.nbufs == 1) {
+		if (buf_todo(dev->tx.bufs) == 1 && dev->tx.nbufs == 1) {
 			write32(sercom_ctrlb(sc), CTRLB_ACKA);
 			opwait(sc);
 		}
-		buf_putc(bus->tx.bufs, (u8)read16(data_reg(sc)));
+		buf_putc(dev->tx.bufs, (u8)read16(data_reg(sc)));
 	}
 	opwait(sc);
 }
 
 const struct i2c_bus_ops sercom_i2c_bus_ops = {
-	.init = sercom_i2c_init,
+	.reset = sercom_i2c_init,
 	.start = sercom_i2c_start,
-	.interrupt = sercom_i2c_irq,
 };
 

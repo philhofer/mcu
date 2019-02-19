@@ -3,3 +3,5 @@
 *.bin
 *.d
 config.mk
+*.mot
+*.srec

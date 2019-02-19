@@ -14,7 +14,7 @@ cat <<EOF
     .word hardfault_entry+1
 EOF
 
-for i in $(seq 5 10); do
+for i in $(seq 4 10); do
     cat <<EOF
     .word fatal0+1
 EOF
