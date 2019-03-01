@@ -4,6 +4,7 @@
 #include <config.h>
 #include <i2c.h>
 #include <drivers/i2c.h>
+#include <drivers/sam/sercom-i2c-master.h>
 #include "sercom.h"
 
 /* register descriptions start
@@ -307,9 +308,9 @@ tx_complete(struct i2c_dev *dev, int err)
 		cb(err, uctx);
 }
 
-/* driver interrupt() routine */
+/* driver interrupt routine */
 void
-sercom_i2c_irq(struct i2c_dev *dev)
+sercom_i2c_master_irq(struct i2c_dev *dev)
 {
 	sercom_t sc = dev_config(dev)->base;
 	u16 status;

@@ -11,6 +11,10 @@ ifeq ($(CONFIG_SPI), y)
 	objects += $(driverdir)/sam/sercom-spi.o
 endif
 
+ifeq ($(CONFIG_USB), y)
+	objects += $(driverdir)/sam/usb.o
+endif
+
 $(boarddir)/userrow.elf: $(boarddir)/userrow.o | $(boarddir)/userrow.ld
 	$(LD) -T $| -o $@ $^
 

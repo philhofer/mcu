@@ -11,7 +11,7 @@ extern const struct gpio_ops port_gpio_ops;
 		.ops = &port_gpio_ops 		\
 	}
 
-/* port_pmux_init() sets a pin within a port group
+/* port_pmux_pin() sets a pin within a port group
  * to the given peripheral role. If 'input' is set,
  * the pin is configured as an input pin with the
  * internal pull-up/down resistor enabled.
@@ -20,7 +20,7 @@ extern const struct gpio_ops port_gpio_ops;
  * for the pin 'role' multiplexing table. Roles
  * are assigned using a single capital letter
  * beginning at 'A'. */
-int port_pmux_init(unsigned group, unsigned pin, uchar role);
+int port_pmux_pin(unsigned group, unsigned pin, uchar role);
 
 #endif
 

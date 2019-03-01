@@ -1,5 +1,5 @@
 #include <arch.h>
-#include <idle.h>
+#include <libc.h>
 #include <config.h>
 #include <gpio.h>
 
@@ -22,5 +22,7 @@ start(void)
 
 		while ((cycles = getcycles()) < nextcycles) ;
 		gpio_toggle(&red_led);
+
+		print("Hello, World!\n");
 	} while (1);
 }

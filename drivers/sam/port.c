@@ -54,7 +54,7 @@ port_pincfg_reg8(u8 group, unsigned pin)
 }
 
 int
-port_pmux_pin(u8 group, u8 pin, u8 role, bool input)
+port_pmux_pin(u8 group, u8 pin, u8 role)
 {
 	ulong reg;
 	u8 mask;

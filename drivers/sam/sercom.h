@@ -75,9 +75,4 @@ int sercom_setup(unsigned n);
  * synchronization */
 void sercom_enable(const sercom_t sc);
 
-/* create an I2C master bus with sercom 'n' */
-#define SERCOM_CLAIM_I2C_MASTER(bus, n) \
-	void sercom##n##_irq_entry(void) { sercom_i2c_master_irq(&sercoms[n]); } \
-	DECLARE_I2C_BUS(bus, &sercom_i2c_bus_ops, &sercoms[n])
-
 #endif

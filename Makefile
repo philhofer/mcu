@@ -20,6 +20,14 @@ ifeq ($(CONFIG_GPIO), y)
 	objects += gpio.o
 endif
 
+ifeq ($(CONFIG_USB), y)
+	objects += usb.o
+endif
+
+ifeq ($(CONFIG_USBSERIAL), y)
+	objects += usb-cdc-acm.o
+endif
+
 headers += config.h
 
 %.o: %.c
@@ -33,6 +41,7 @@ headers += config.h
 %.bin: %.elf
 	@echo "OBJCOPY $@"
 	@$(OBJCOPY) -Obinary $^ $@
+	@chmod -x $@
 
 %.elf: $(objects) | $(boarddir)/board.ld
 	@echo "LD $@"

@@ -21,6 +21,14 @@
 #define NVMCTRL_BASE 0x41004000
 #define EVSYS_BASE   0x42000400
 
+#define USB_APB_INDEX 5
+#define USB_PINGRP    PINGRP_A
+#define USB_SOF_PIN   23
+#define USB_DM_PIN    24
+#define USB_DP_PIN    25
+#define USB_PINROLE   6
+#define USB_IRQ_NUM   7
+
 /* values for GENCTRL.SRC */
 #define CLK_SRC_XOSC      0x0
 #define CLK_SRC_GCLKIN    0x1 /* generator input pad */
@@ -64,5 +72,11 @@ apb_num(ulong addr)
 		return 0;
 	}
 }
+
+/* accessors for USB calibration in
+ * the NVM Calibration Area  (used by drivers) */
+unsigned usb_trim(void);
+unsigned usb_transn(void);
+unsigned usb_transp(void);
 
 #endif
