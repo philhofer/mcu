@@ -7,7 +7,7 @@
  *
  * USB control messages are a strange beast,
  * since there are at least two phases of each transfer
- * (and potentially more). After the status packet,
+ * (and potentially more). After the SETUP packet,
  * we should expect some IN or OUT packets, or some
  * 'status' packets (zero-length IN or OUT packets).
  * The way we manage this is by calling
@@ -105,10 +105,16 @@ handle_get_config(struct usb_dev *dev, u16 raw)
 static int
 handle_set_config(struct usb_dev *dev, u16 raw)
 {
-	/* expect a one-byte data transfer OUT;
-	 * we're going to ignore the data because
-	 * we only support one config */
-	usb_ignore_out(dev);
+	/* we only support config=1 */
+	return raw == 1 ? 0 : -1;
+}
+
+static int
+handle_get_interface(struct usb_dev *dev, u16 raw)
+{
+	/* we don't support alternate interfaces */
+	uchar buf[1] = {0};
+	usb_ep0_queue_response(dev, buf, 1);
 	return 0;
 }
 
@@ -169,7 +175,7 @@ send_more(struct usb_dev *dev)
 	if (dev->tx_more && dev->more_len)
 		usb_ep0_queue_response(dev, dev->tx_more, dev->more_len);
 	else
-		ep0_default(dev);
+		ep0_default(dev); /* we shouldn't get here... */
 }
 
 /* usb_ep0_queue_response() handles
@@ -233,10 +239,6 @@ usb_handle_setup(struct usb_dev *dev, const uchar *in, u8 len)
 	if ((err = decode_setup(&setup, in, len)) < 0)
 		return err;
 
-	/* make sure we don't accidentally
-	 * handle duplicate SETUPs... */
-	memset(dev->ctrlbuf, 0, 8);
-
 	/* first, sane defaults for everyone:
 	 * if this is a host-to-device (OUT)
 	 * setup packet, then expect a zero-length
@@ -256,10 +258,10 @@ usb_handle_setup(struct usb_dev *dev, const uchar *in, u8 len)
 			return handle_get_status(dev);
 		case USB_CLEAR_FEATURE:
 		case USB_SET_FEATURE:
+		case USB_SET_INTERFACE:
 			/* unimplemented, but don't
 			 * bail out, just accept the data */
-			err = 0;
-			break;
+			return 0;
 		case USB_SET_ADDRESS:
 			set_dev_address(dev, setup.value);
 			return 0;
@@ -271,17 +273,19 @@ usb_handle_setup(struct usb_dev *dev, const uchar *in, u8 len)
 
 		case USB_GET_CONFIGURATION:
 			return handle_get_config(dev, setup.value);
-
 		case USB_SET_CONFIGURATION:
 			return handle_set_config(dev, setup.value);
+		case USB_GET_INTERFACE:
+			return handle_get_interface(dev, setup.value);
 		}
 		break;
 	case REQ_TYPE_CLASS:
 		return handle_class_setup(dev, &setup);
 	}
+	/* we know at leasat SET_DESCRIPTOR will
+	 * end up here (we don't implement it) */
 	usb_unhandled(setup.rtype);
-	/* make sure we can at least accept
-	 * additional OUT and SETUP packets */
+	/* go back to insisting on SETUP packets */
 	ep0_default(dev);
 	return err;
 }

@@ -22,7 +22,6 @@ start(void)
 
 		while ((cycles = getcycles()) < nextcycles) ;
 		gpio_toggle(&red_led);
-
-		print("Hello, World!\n");
+		print("Toggled.\n");
 	} while (1);
 }

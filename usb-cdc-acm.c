@@ -223,17 +223,15 @@ post_out(struct usb_dev *dev, u8 ep, void *buf, uchar len, int err)
 	/* if we're discarding input, just keep
 	 * accepting reads into the buffer */
 	if (acm->discard_in)
-		dev->drv->expect_out(dev, 0x01, acm->outbuf, sizeof(acm->outbuf));
+		dev->drv->expect_out(dev, 0x01, acm->inbuf, sizeof(acm->inbuf));
 }
 
 /* called in interrupt context after an IN */
 static void
 post_in(struct usb_dev *dev, u8 ep, int err)
 {
-	struct acm_data *acm = classdata(dev);
-	if (ep != 0x81)
-		return;
-	acm->outstatus = err;
+	if (ep == 0x81)
+		classdata(dev)->outstatus = err;
 }
 
 static int
@@ -244,7 +242,8 @@ handle_setup(struct usb_dev *dev, struct usb_setup *setup)
 	 * the capabilities descriptor we include above
 	 * doesn't say we support any of the class-specific
 	 * control messages, so in theory we shouldn't get
-	 * here at all...
+	 * here at all.. however, the Linux cdc_acm driver
+	 * ignores the capabilities descriptor :(
 	 * the default control message behavior will pretend
 	 * to handle messages with zero-length data phases
 	 * for us, so we just need to handle setup->datalen > 0
@@ -271,6 +270,8 @@ handle_setup(struct usb_dev *dev, struct usb_setup *setup)
 static void
 acm_reset(struct usb_dev *dev)
 {
+	struct acm_data *acm = classdata(dev);
+
 	dev->drv->init_ep(dev, 0x01, EP_BULK);
 	dev->drv->init_ep(dev, 0x81, EP_BULK);
 
@@ -278,6 +279,11 @@ acm_reset(struct usb_dev *dev)
 	 * it's part of the descriptor, so we
 	 * send NAKs for it */
 	dev->drv->init_ep(dev, 0x82, EP_INTERRUPT);
+
+	/* if we're discarding input data, make sure
+	 * we start ACKing it immediately */
+	if (acm->discard_in)
+		dev->drv->expect_out(dev, 0x01, acm->inbuf, sizeof(acm->inbuf));
 }
 
 /* note: endpoint 0x82 doesn't have an implementation;

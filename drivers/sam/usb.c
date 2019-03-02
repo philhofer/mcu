@@ -390,23 +390,26 @@ expect_out(struct usb_dev *dev, u8 ep, void *buf, u8 len)
 	u8 enable;
 
 	assert((ep & 0x80) == 0 && ep < MAX_ENDPOINTS && len <= 64);
-
 	assert(((ulong)buf & 3) == 0); /* alignment */
+
+	if ((epstatus_get(ep)&EP_BK0RDY) == 0)
+		return -EAGAIN;
 
 	ept = &sam_usb_descriptor.eps[ep];
 	ept->base0 = buf;
 	ept->pcksize0 = PCKSIZE_64 | (64 << PCKSIZE_MULTI_SHIFT);
 	ept->status_bk0 = 0;
 
-	/* TODO: EAGAIN if data present */
-
-	epstatus_clr(ep, EP_BK0RDY|EP_STALLRQ0);
 	enable = EPINT_TRCPT0;
 	if (ep == 0)
 		enable |= EPINT_RXSTP;
 
+	/* interrupts have to be cleared _before_
+	 * the bank status is set; otherwise we
+	 * could end up clearing a valid interrupt */
 	epint_clr(ep, enable);
 	epint_enable(ep, enable);
+	epstatus_clr(ep, EP_BK0RDY|EP_STALLRQ0);
 
 	return 0;
 }
@@ -421,7 +424,8 @@ expect_in(struct usb_dev *dev, u8 ep, void *buf, u8 len)
 
 	assert(((ulong)buf & 3) == 0); /* alignment */
 
-	/* TODO: EAGAIN if data present */
+	if (epstatus_get(ep)&EP_BK1RDY)
+		return -EAGAIN;
 
 	ept = &sam_usb_descriptor.eps[ep];
 	ept->base1 = buf;
@@ -439,7 +443,6 @@ static void
 ep_irq(struct usb_dev *dev, int i)
 {
 	struct endpoint *ept = &sam_usb_descriptor.eps[i];
-	/* u8 status = epstatus_get(i); */
 	u8 flags = epint_get(i);
 	void *buf;
 	uchar len;
