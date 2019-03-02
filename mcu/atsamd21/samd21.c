@@ -2,21 +2,6 @@
 #include <board.h>
 #include <drivers/sam/sercom.h>
 
-#define ABP_A 0
-#define APB_B 1
-#define ABP_C 2
-
-#define ROLE_A 0
-#define ROLE_B 1
-#define ROLE_C 2
-#define ROLE_D 3
-#define ROLE_E 4
-#define ROLE_F 5
-
-#define APB_A_BASE 0x40000000
-#define APB_B_BASE 0x41000000
-#define APB_C_BASE 0x42000000
-
 /* NOTE: the way the SERCOM pins are mux'd, you won't be able to
  * use all 6 units with all 4 pads unless you have the SAMD21J (64-pin) variant.
  * Since there are two sercom pin 'roles,' you can peek at the datasheet and

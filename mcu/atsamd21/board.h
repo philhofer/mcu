@@ -21,6 +21,25 @@
 #define NVMCTRL_BASE 0x41004000
 #define EVSYS_BASE   0x42000400
 
+/* peripheral bus and pin multiplexing constants */
+#define ABP_A 0
+#define APB_B 1
+#define ABP_C 2
+#define ROLE_A 0
+#define ROLE_B 1
+#define ROLE_C 2
+#define ROLE_D 3
+#define ROLE_E 4
+#define ROLE_F 5
+#define APB_A_BASE 0x40000000
+#define APB_B_BASE 0x41000000
+#define APB_C_BASE 0x42000000
+
+/* PORT pin groups */
+#define PINGRP_A 0
+#define PINGRP_B 1
+
+/* USB peripheral configuration */
 #define USB_APB_INDEX 5
 #define USB_PINGRP    PINGRP_A
 #define USB_SOF_PIN   23
@@ -52,10 +71,6 @@
 #define CLK_DST_EIC        0x05
 #define CLK_DST_USB        0x06
 #define CLK_DST_SERCOMSLOW 0x13
-
-/* There are two PORT groups, A and B */
-#define PINGRP_A 0
-#define PINGRP_B 1
 
 static inline unsigned
 apb_num(ulong addr)

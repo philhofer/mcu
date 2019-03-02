@@ -1,10 +1,6 @@
 #include <arch.h>
 #include <sysctrl.h>
 #include <board.h>
-#include <drivers/sam/port.h>
-#include <usb.h>
-#include <usb-cdc-acm.h>
-#include <drivers/sam/usb.h>
 
 #define stub __attribute__((weak, alias("default_handler")))
 
@@ -35,13 +31,8 @@ stub void nvmctrl_irq_entry(void);
 /* irq 6 */
 stub void dmac_irq_entry(void);
 
-extern struct usb_dev default_usb;
-
 /* irq 7 */
-void
-usb_irq_entry(void) {
-	sam_usb_irq(&default_usb);
-}
+stub void usb_irq_entry(void);
 
 /* irq 8 */
 stub void evsys_irq_entry(void);
@@ -103,28 +94,8 @@ stub void ptc_irq_entry(void);
 /* irq 27 */
 stub void i2s_irq_entry(void);
 
-/* Feather-M0 red LED light is on PA17 */
-PORT_GPIO_PIN(red_led, PINGRP_A, 17);
-
-struct acm_data default_acm_data = {
-	.discard_in = true,
-};
-
-struct usb_dev default_usb = {
-	.class = &usb_cdc_acm,
-	.drv = &sam_usb_driver,
-	.classdata = &default_acm_data,
-};
-
-USBSERIAL_OUT(usbttyout, &default_usb);
-
-const struct output *stdout = &usbttyout;
-const struct input  *stdin = NULL;
-
 void
 board_setup(void)
 {
 	clock_init_defaults();
-
-	usb_init(&default_usb);
 }

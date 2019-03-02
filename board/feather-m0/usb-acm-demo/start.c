@@ -1,14 +1,17 @@
 #include <arch.h>
 #include <libc.h>
 #include <config.h>
+#include <usb.h>
 #include <gpio.h>
-
-extern struct gpio red_led;
+#include <red-led.h>
+#include <default-usb.h>
 
 void
 start(void)
 {
 	u64 cycles, nextcycles;
+
+	usb_init(&default_usb);
 	gpio_reset(&red_led, GPIO_OUT);
 	gpio_write(&red_led, 1);
 

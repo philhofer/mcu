@@ -2,13 +2,29 @@
 
 ## Navigating the Source
 
-The source tree is organized such that more generic code lives
-at higher levels of the source tree, and more device-specific /
-non-portable code lives deeper in the tree. Consequently, as a general
-rule, files deeper in the tree can depend upon (i.e. include or link against)
-files higher up in the tree, but not vice-versa.
+ - Portable code lives at the top level
+ - Architecture-specific code lives in `arch/<arch>/`
+ - MCU-specific code lives in `mcu/<mcu>/`
+ - Board-specific code lives in `board/<board>`
+ - Semi-portable code lives in `drivers/` (for example,
+   code for vendor peripherals that isn't MCU-specific)
 
-Conventionally, the first two parts of the directory path for a device
-are "arch" and "board," respectively. For example, the Atmega ATSAMD21G18 board
-is an ARMv6-M device, so its configuration lives at `armv6m/atsamd21g18/`.
+"Projects" live underneath the board directories and contain
+a Makefile for building the necessary artifacts for the project.
 
+## Configuration Format
+
+Configuration files in the source tree use a simple text-based
+format so that they can be read as POSIX shell scripts and as
+Makefiles. The general form is:
+
+```
+# comment
+CONFIG_KEY=value
+```
+
+Note that each variable begins with `CONFIG_`, and there are no
+spaces around the `=` sign.
+
+To keep parsers maximally dumb, comment lines must have '#'
+as the first character of the line.

@@ -3,7 +3,7 @@
 
 #define CONFIG_ARCH "@ARCH@"
 
-#define CONFIG_BOARD "@BOARD@"
+#define CONFIG_MCU "@MCU@"
 
 #define CPU_HZ @CPU_HZ@
 

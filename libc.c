@@ -3,6 +3,12 @@
 #include <error.h>
 #include <idle.h>
 
+__attribute__((weak))
+const struct output *stdout;
+
+__attribute__((weak))
+const struct input *stdin;
+
 void *
 memset(void *p, int c, ulong sz)
 {
