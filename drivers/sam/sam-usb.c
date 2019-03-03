@@ -3,6 +3,7 @@
 #include <error.h>
 #include <libc.h>
 #include <board.h>
+#include <idle.h>
 #include <usb-internal.h>
 #include <drivers/sam/usb.h>
 #include <drivers/sam/port.h>
@@ -501,19 +502,37 @@ error_all_endpoints(struct usb_dev *dev, int err)
 }
 */
 
+struct work sam_usb_work;
+
+static void sam_usb_bh(struct usb_dev *);
+
 void
 sam_usb_irq(struct usb_dev *dev)
 {
+	init_work(&sam_usb_work, (void(*)(void *))sam_usb_bh, dev);
+	schedule_work(&sam_usb_work);
+	irq_disable_num(USB_IRQ_NUM);
+}
+
+static void
+sam_usb_bh(struct usb_dev *dev)
+{
 	u8 status = int_get();
 	u32 epirq;
+
+	/* any additional interrupts that have been
+	 * raised since this work was scheduled are
+	 * duplicates; we'll be handling those causes
+	 * too. */
+	irq_clear_pending(USB_IRQ_NUM);
 
 	/* paranoia: clear everything */
 	int_clr(status);
 
 	if (status & INT_EORST) {
 		/* reset everything */
-		/* error_all_endpoints(dev, -EAGAIN); */
 		dev_init(dev);
+		irq_enable_num(USB_IRQ_NUM);
 		return;
 	}
 
@@ -522,6 +541,7 @@ sam_usb_irq(struct usb_dev *dev)
 		if (epirq & (1 << i))
 			ep_irq(dev, i);
 	}
+	irq_enable_num(USB_IRQ_NUM);
 }
 
 const struct usb_driver sam_usb_driver = {

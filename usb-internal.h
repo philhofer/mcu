@@ -89,19 +89,39 @@ struct usb_class {
 };
 
 struct usb_driver {
+	/* init() should perform peripheral-specific
+	 * initialization, up to and including attaching
+	 * to the bus. */
 	void (*init)(struct usb_dev *dev);
 	
-	/* set device address */
+	/* set_addr() should set the device address
+	 * to the given address */
 	void (*set_addr)(struct usb_dev *dev, u8 addr);
 
+	/* init_ep() should initialize the given endpoint
+	 * of the given type. Packets to this endpoint
+	 * should be NAK'd unless the endpoint type
+	 * is EP_CONTROL. */
 	int (*init_ep)(struct usb_dev *dev, u8 ep, enum ep_type type);
 
-	/* initialize data in preparation for a host OUT on an endpoint */
+	/* expect_out() should direct the next host OUT packet
+	 * directed at the given endpoint to the provided buffer.
+	 * After the packet is received, the endpoint should
+	 * resume NAK-ing packets and call ep_rx() on the USB
+	 * class implementation (or usb_ep0_rx() if the
+	 * endpoint is the default pipe). */
 	int (*expect_out)(struct usb_dev *dev, u8 ep, void *buf, u8 len);
 
-	/* initialize data in preparation for a host IN on an endpoint */
+	/* expect_in() should respond to the next host IN packet
+	 * directed at the given endpoint with the data in the
+	 * provided buffer. After the DATA packet response is sent,
+	 * the endpoint should resume NAK-ing packets and call
+	 * ep_tx() on the USB class implementation (or
+	 * usb_ep0_tx() if the endpoint is the default pipe). */
 	int (*expect_in)(struct usb_dev *dev, u8 ep, void *buf, u8 len);
 
+	/* stall_ep() indicates that host packets directed at
+	 * the given interface should be answered with a STALL packet. */
 	int (*stall_ep)(struct usb_dev *dev, u8 ep0);
 };
 
@@ -112,7 +132,7 @@ struct usb_driver {
 int usb_handle_setup(struct usb_dev *dev, const uchar *data, u8 len);
 
 /* usb_reset() is called by drivers when
- * a host sents a reset */
+ * a host sends a reset */
 void usb_reset(struct usb_dev *dev);
 
 /* post-OUT hook */
@@ -128,6 +148,9 @@ void usb_ep0_tx(struct usb_dev *dev, int err);
  * automatically */
 void usb_ep0_queue_response(struct usb_dev *dev, const uchar *data, ulong len);
 
+/* usb_ignore_out() shouldn't exist, but
+ * it lets the control endpoint ignore the
+ * next OUT packet directed to it. */
 void usb_ignore_out(struct usb_dev *dev);
 
 #endif

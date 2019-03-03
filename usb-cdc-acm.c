@@ -280,6 +280,11 @@ acm_reset(struct usb_dev *dev)
 	 * send NAKs for it */
 	dev->drv->init_ep(dev, 0x82, EP_INTERRUPT);
 
+	/* if we were sending data, clear errors
+	 * so we can start sending/receiving again */
+	acm->outstatus = 0;
+	acm->instatus = 0;
+
 	/* if we're discarding input data, make sure
 	 * we start ACKing it immediately */
 	if (acm->discard_in)

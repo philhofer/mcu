@@ -6,6 +6,7 @@
 #define EAGAIN 3
 #define EINVAL 4
 #define EOPNOTSUPP 5
+#define EINTR 6
 
 
 #endif
