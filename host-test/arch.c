@@ -194,18 +194,23 @@ bkpt(void)
 void
 irq_disable_num(unsigned n)
 {
-	lock();
+	if (!in_irq())
+		lock();
 	imask |= (1U << n);
-	unlock();
+	if (!in_irq())
+		unlock();
 }
 
 void
 irq_enable_num(unsigned n)
 {
-	lock();
+	if (!in_irq())
+		lock();
 	imask &= ~(1U << n);
-	irq_check();
-	unlock();
+	if (!in_irq()) {
+		irq_check();
+		unlock();
+	}
 }
 
 bool
@@ -217,39 +222,48 @@ irq_num_is_enabled(unsigned n)
 void
 irq_clear_pending(unsigned n)
 {
-	lock();
+	if (!in_irq())
+		lock();
 	ipending &= ~(1U << n);
-	unlock();
+	if (!in_irq())
+		unlock();
 }
 
 void
 irq_set_pending(unsigned n)
 {
-	lock();
+	if (!in_irq())
+		lock();
 	ipending |= (1U << n);
-	irq_check();
-	unlock();
+	if (!in_irq()) {
+		irq_check();
+		unlock();
+	}
 }
 
 int
 irq_next_pending(void)
 {
 	int rv;
-	lock();
+	if (!in_irq())
+		lock();
 	if (ipending == 0)
 		rv = -1;
 	else
 		rv = __builtin_ctz(ipending);
-	unlock();
+	if (!in_irq())
+		unlock();
 	return rv;
 }
 
 void
 irq_clear_all_pending(void)
 {
-	lock();
+	if (!in_irq())
+		lock();
 	ipending = 0;
-	unlock();
+	if (!in_irq())
+		unlock();
 }
 
 void

@@ -45,17 +45,16 @@ expect_out_zlp(struct usb_dev *dev)
 	dev->drv->expect_out(dev, 0, dev->ctrlbuf, 0);
 }
 
-/* the default state is to report an error
- * for everything except setup packets;
- * this means reverting to the default
- * state immediately after a SETUP will
- * appear as an error to the host, which
- * is likely what we want */
 static inline void
-ep0_default(struct usb_dev *dev)
+ep0_stall(struct usb_dev *dev)
 {
 	dev->drv->stall_ep(dev, 0);
 	dev->drv->stall_ep(dev, 0x80);
+}
+
+static inline void
+ep0_default(struct usb_dev *dev)
+{
 }
 
 static int
@@ -86,7 +85,7 @@ handle_get_descriptor(struct usb_dev *dev, u8 type, u8 index, u16 outlen)
 	case 8: /* interface power */
 		break;
 	}
-	ep0_default(dev);
+	ep0_stall(dev);
 	return -1;
 }
 
@@ -106,7 +105,7 @@ static int
 handle_set_config(struct usb_dev *dev, u16 raw)
 {
 	/* we only support config=1 */
-	return raw == 1 ? 0 : -1;
+	return 0;
 }
 
 static int
@@ -122,7 +121,8 @@ static int
 handle_class_setup(struct usb_dev *dev, struct usb_setup *setup)
 {
 	if (dev->class->handle_setup(dev, setup) < 0) {
-		ep0_default(dev);
+		if (setup->datalen > 0)
+			ep0_stall(dev);
 		return -1;
 	}
 	return 0;
@@ -250,7 +250,6 @@ usb_handle_setup(struct usb_dev *dev, const uchar *in, u8 len)
 			expect_out_zlp(dev);
 	}
 
-	err = -1;
 	switch (USB_REQ_TYPE(setup.rtype)) {
 	case REQ_TYPE_STANDARD:
 		switch (setup.rcode) {
@@ -282,12 +281,12 @@ usb_handle_setup(struct usb_dev *dev, const uchar *in, u8 len)
 	case REQ_TYPE_CLASS:
 		return handle_class_setup(dev, &setup);
 	}
-	/* we know at leasat SET_DESCRIPTOR will
-	 * end up here (we don't implement it) */
-	usb_unhandled(setup.rtype);
-	/* go back to insisting on SETUP packets */
-	ep0_default(dev);
-	return err;
+	/* If datalen was zero, we pretend to handle the transfer.
+	 * Otherwise, we haven't arranged for anything to happen,
+	 * and we need to yield a STALL in the data/setup phase. */
+	if (setup.datalen != 0)
+		ep0_stall(dev);
+	return -1;
 }
 
 void

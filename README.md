@@ -1,5 +1,9 @@
 # Microcontroller HAL
 
+## Supported Hardware
+
+ - Atmel SAMD21xxx MCUs (Arduino Zero, Feather M0, etc.)
+
 ## Navigating the Source
 
  - Portable code lives at the top level

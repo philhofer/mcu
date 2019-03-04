@@ -193,7 +193,7 @@ acm_write(struct usb_dev *dev, const uchar *src, ulong len)
 
 	acm->outstatus = -EAGAIN;
 	memcpy(acm->outbuf, src, len);
-	dev->drv->expect_in(dev, 0x81, acm->outbuf, sizeof(acm->outbuf));
+	dev->drv->expect_in(dev, 0x81, acm->outbuf, len);
 	return len;
 }
 
@@ -263,6 +263,7 @@ handle_setup(struct usb_dev *dev, struct usb_setup *setup)
 			return -1;
 		memset(dev->ctrlbuf, 0, setup->datalen);
 		usb_ep0_queue_response(dev, dev->ctrlbuf, setup->datalen);
+		return 0;
 	}
 	return -1;
 }

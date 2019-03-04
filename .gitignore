@@ -5,3 +5,4 @@
 config.mk
 *.mot
 *.srec
+host-test/*-test
