@@ -12,6 +12,8 @@
  *   - some control messages are not implemented
  *   - only 1 device configuration descriptor is supported
  *     (this is typical anyway)
+ *   - there are pervasive assumptions about 64-byte
+ *      endpoint buffers... fix that?
  */
 
 /* values for 'Recipient' in bmReqeustType */

@@ -138,6 +138,9 @@
  * it is 'armed' to receive data.
  * It seems like this also means we have to process SETUP
  * packets in interrupt context.
+ *
+ * TODO: change MAX_ENDPOINTS? It wastes memory
+ * if we make it too large...
  */
 
 struct endpoint {
@@ -479,29 +482,11 @@ ep_irq(struct usb_dev *dev, int i)
 	}
 }
 
-/* for all endpoints that were waiting
- * to receive or transmit data, return the
- * given error and bring the endpoint down */
-/*
-static void
-error_all_endpoints(struct usb_dev *dev, int err)
-{
-	u8 status;
-	for (unsigned i=1; i<MAX_ENDPOINTS; i++) {
-		epint_clr(i, epint_get(i));
-		status = epstatus_get(i);
-		if (!(status & EP_BK0RDY)) {
-			dev->class->ep_rx(dev, i, NULL, 0, err);
-			epstatus_set(i, EP_BK0RDY);
-		}
-		if (status & EP_BK1RDY) {
-			dev->class->ep_tx(dev, i | 0x80, err);
-			epstatus_clr(i, EP_BK1RDY);
-		}
-	}
-}
-*/
-
+/* peripheral interrupts are largely handled
+ * outside of the actual interrupt handler;
+ * the handler simply queues the 'bottom half'
+ * and disables USB interrupts until the bottom
+ * half enables them again */
 struct work sam_usb_work;
 
 static void sam_usb_bh(struct usb_dev *);
@@ -509,7 +494,8 @@ static void sam_usb_bh(struct usb_dev *);
 void
 sam_usb_irq(struct usb_dev *dev)
 {
-	init_work(&sam_usb_work, (void(*)(void *))sam_usb_bh, dev);
+	sam_usb_work.udata = dev;
+	sam_usb_work.func = (void(*)(void *))sam_usb_bh;
 	schedule_work(&sam_usb_work);
 	irq_disable_num(USB_IRQ_NUM);
 }

@@ -1,0 +1,11 @@
+Host Testing
+=============
+
+This directory contains tests that
+can be run directly on the host. In principle,
+any portable code can be tested this way, which
+keeps us from having to invent elaborate target
+testing harnesses in most cases. Hopefully this
+shortens the build/test/debug cycle for code
+that doesn't need to twiddle hardware bits.
+
