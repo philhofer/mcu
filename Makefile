@@ -9,6 +9,7 @@ nproc=$(shell nproc)
 all:
 	set -e; for d in $(subdirs); do $(MAKE) -j$(nproc) -C $$d all; done
 clean:
+	find . -name '*.d' | xargs rm
 	set -e; for d in $(subdirs); do $(MAKE) -C $$d clean; done
 test:
 	$(MAKE) -C host-test/ all

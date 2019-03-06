@@ -28,6 +28,8 @@ idle-test: idle-test.o idle.o arch.o
 cdc-acm-test: cdc-acm-test.o idle.o arch.o usb.o usb-cdc-acm.o usb-loopback.o
 
 .DEFAULT_GOAL := all
-.PHONY: all
+.PHONY: all clean
 all: $(wildcard *-test)
 	@set -e; for tst in $^; do ./$$tst; echo "$$tst PASS"; done
+clean:
+	rm $(cdeps) $(wildcard *.o)
