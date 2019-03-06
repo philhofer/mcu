@@ -64,11 +64,7 @@ sercom_syncbusy(const sercom_t sc)
 }
 
 /* sercom_reset() resets a sercom module */
-void sercom_reset(const sercom_t sc);
-
-/* sercom_setup(n) assigns a clock generator to the sercom clock
- * and unmasks the peripheral in the APBx */
-int sercom_setup(unsigned n);
+void sercom_reset(const struct sercom_config *conf, int pins);
 
 /* sercom_enable() sets the enable bit on
  * the sercom module and waits for clock

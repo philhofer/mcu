@@ -1,17 +1,42 @@
 #include <bits.h>
 #include <arch.h>
 #include <error.h>
-#include <buffer.h>
 #include <i2c.h>
 #include <drivers/i2c.h>
 
-/* i2c_start_iov() is essentially a direct invocation
- * of the driver code with some additionnal sanity checking;
- * the only abstraction here is the bus-number-to-driver indirection */
 int
-i2c_start_iov(struct i2c_dev *dev, i8 addr, struct mbuf *bufs, int nbufs, void (*done)(int, void *), void *uctx)
+i2c_write_reg(struct i2c_dev *dev, i8 addr, u8 reg, void *buf, unsigned buflen,
+		void (*done)(int, void *), void *uctx)
 {
-	return dev->ops->start(dev, addr, bufs, nbufs, done, uctx);
+	if (dev->tx.state != I2C_STATE_NONE)
+		return -EAGAIN;
+	dev->tx.buf = buf;
+	dev->tx.ackd = 0;
+	dev->tx.buflen = buflen;
+	dev->tx.done = done;
+	dev->tx.uctx = uctx;
+	dev->tx.addr = addr;
+	dev->tx.reg = reg;
+
+	return dev->ops->start(dev, I2C_STATE_SEND_REG_WRITE);
+}
+
+int
+i2c_read_reg(struct i2c_dev *dev, i8 addr, u8 reg,
+		void *buf, unsigned buflen,
+		void (*done)(int, void *), void *uctx)
+{
+	if (dev->tx.state != I2C_STATE_NONE)
+		return -EAGAIN;
+	dev->tx.buf = buf;
+	dev->tx.ackd = 0;
+	dev->tx.buflen = buflen;
+	dev->tx.done = done;
+	dev->tx.uctx = uctx;
+	dev->tx.addr = addr;
+	dev->tx.reg = reg;
+
+	return dev->ops->start(dev, I2C_STATE_SEND_REG_READ);
 }
 
 /* callback from interrupt context */
@@ -28,14 +53,10 @@ op_done(int err, void *ctx)
 int
 i2c_read_sync(struct i2c_dev *dev, i8 addr, u8 reg, void *dst, ulong dstlen)
 {
-	struct mbuf bufs[2];
 	int status[2] = {0, 0}; /* status[0] = done; status[1] = err */
 	int err;
 
-	buf_init_out(&bufs[0], &reg, sizeof(reg));
-	buf_init_in(&bufs[1], dst, dstlen);
-
-	if ((err = i2c_start_iov(dev, addr, bufs, 2, op_done, status)) != 0)
+	if ((err = i2c_read_reg(dev, addr, reg, dst, dstlen, op_done, status)) != 0)
 		return err;	
 
 	while (!status[0])
@@ -46,15 +67,12 @@ i2c_read_sync(struct i2c_dev *dev, i8 addr, u8 reg, void *dst, ulong dstlen)
 /* synchronous I2C write transaction implemented
  * using the asynchronous API and polling */
 int
-i2c_write_sync(struct i2c_dev *dev, i8 addr, void *data, ulong size)
+i2c_write_sync(struct i2c_dev *dev, i8 addr, u8 reg, void *data, ulong size)
 {
-	struct mbuf bufs[1];
 	int status[2] = {0, 0};
 	int err;
 
-	buf_init_out(&bufs[0], data, size);
-
-	if ((err = i2c_start_iov(dev, addr, bufs, 1, op_done, status)) != 0)
+	if ((err = i2c_write_reg(dev, addr, reg, data, size, op_done, status)) != 0)
 		return err;
 
 	while (!status[0])

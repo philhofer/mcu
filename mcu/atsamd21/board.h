@@ -72,6 +72,10 @@
 #define CLK_DST_USB        0x06
 #define CLK_DST_SERCOMSLOW 0x13
 
+/* for now we use these two clock generators */
+#define CLK_GEN_MAIN   0x00
+#define CLK_GEN_ULP32K 0x02
+
 static inline unsigned
 apb_num(ulong addr)
 {

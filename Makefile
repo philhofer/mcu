@@ -1,3 +1,4 @@
+.SUFFIXES:
 
 submakes=$(shell find . -name Makefile -type f -mindepth 2)
 subdirs=$(foreach file,$(submakes),$(dir $(file)))

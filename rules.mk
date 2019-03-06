@@ -4,6 +4,8 @@ include config
 
 # targets will be in board/<boardname>/<targetname>
 
+.SUFFIXES:
+
 rootdir=../../../
 boarddir=../
 archdir=$(rootdir)/arch/$(CONFIG_ARCH)

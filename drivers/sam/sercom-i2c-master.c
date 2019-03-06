@@ -12,6 +12,9 @@
  * 'SAMD21 Datasheet' */
 
 #define CTRLA_PINOUT   (1 << 8)  /* enable 4-wire mode */
+#define CTRLA_SDAHOLD75  (1 << 20);
+#define CTRLA_SDAHOLD450 (2 << 20);
+#define CTRLA_SDAHOLD600 (3 << 20);
 #define CTRLA_MEXTTOEN (1 << 22) /* 'master SCL low extend timeout' */
 #define CTRLA_SEXTTOEN (1 << 23) /* 'slave SCL low extend timeout' */
 #define CTRLA_SCLSM    (1 << 27) /* SCL 'clock stretch mode' */
@@ -93,6 +96,7 @@ dev_enable_irq(struct i2c_dev *dev)
 {
 	const struct sercom_config *conf = dev_config(dev);
 
+	write8(intflag_reg(conf->base), INT_ERR|INT_SB|INT_MB);
 	write8(intenset_reg(conf->base), INT_ERR|INT_SB|INT_MB);
 	irq_enable_num(conf->irq);
 }
@@ -134,7 +138,7 @@ opwait(const sercom_t sc)
 /* status_err() converts the status
  * register to an error code */
 static int
-status_err(u16 status)
+status_err(u16 status, u8 iflags)
 {
 	if (status&(STATUS_BUSERR|STATUS_LENERR|STATUS_RXNACK))
 		return -EIO;
@@ -146,6 +150,10 @@ status_err(u16 status)
 	/* some protocol-level timeout */
 	if (status&(STATUS_LOTOUT|STATUS_MEXTTOUT|STATUS_SEXTTOUT))
 		return -ETIMEDOUT;
+
+	/* not sure we should ever get here */
+	if (iflags&INT_ERR)
+		return -EIO;
 
 	return 0;
 }
@@ -209,10 +217,10 @@ sercom_i2c_init(struct i2c_dev *dev, int flags)
 	u32 reg;
 	sercom_t sc = dev_config(dev)->base;
 
-	if (dev->tx.status != I2C_STATUS_NONE)
+	if (dev->tx.state != I2C_STATE_NONE)
 		return -EAGAIN;
 
-	sercom_reset(sc);
+	sercom_reset(dev_config(dev), 2);
 
 	/* 'smart mode' means that master read operations
 	 * will automatically send an ACK/NACK bit, which
@@ -226,7 +234,8 @@ sercom_i2c_init(struct i2c_dev *dev, int flags)
 	 * We're implicitly setting the 'speed' bits to 0,
 	 * which works for 100kHz (Sm) and 400kHz (Fm) operation. */
 	reg = CTRLA_SEXTTOEN|CTRLA_MEXTTOEN|CTRLA_LOTOUTEN;
-	reg |= CTRLA_RUNSTBY|CTRLA_SCLSM;
+	reg |= CTRLA_SDAHOLD75; /* TODO: configurable? */
+	reg |= CTRLA_RUNSTBY;
 	reg |= SERCOM_I2C_MASTER;
 	write32(sercom_ctrla(sc), reg);
 
@@ -235,6 +244,7 @@ sercom_i2c_init(struct i2c_dev *dev, int flags)
 	if (!reg)
 		return -EOPNOTSUPP;
 	write32(baud_reg(sc), reg);
+	opwait(sc);
 	
 	sercom_enable(sc);
 
@@ -245,35 +255,55 @@ sercom_i2c_init(struct i2c_dev *dev, int flags)
 	return 0;
 }
 
+static void
+clear_nack(sercom_t sc)
+{
+	/* just clear the upper half of the register */
+	write16(sercom_ctrlb(sc)+2, 0);
+	opwait(sc);
+}
+
+static unsigned
+bus_state(sercom_t sc)
+{
+	return read16(status_reg(sc))&BUS_OWNER;
+}
+
+static void
+stop(sercom_t sc);
+
 /* driver start() routine */
 static int
-sercom_i2c_start(struct i2c_dev *dev, i8 addr, struct mbuf *bufs, int nbufs, void (*done)(int, void *), void *uctx)
+sercom_i2c_start(struct i2c_dev *dev, u8 state)
 {
 	sercom_t sc = dev_config(dev)->base;
 
 	/* bus must be available */
-	if (dev->tx.status != I2C_STATUS_NONE || read16(status_reg(sc)) != BUS_IDLE)
+	if (dev->tx.state != I2C_STATE_NONE)
 		return -EAGAIN;
-	if (nbufs == 0)
-		return 0;
 
-	dev->tx.status = I2C_STATUS_MASTER;
+	if (state != I2C_STATE_SEND_REG_READ && state != I2C_STATE_SEND_REG_WRITE)
+		return -EINVAL;
 
-	/* low bit of ADDR reg indicates read;
-	 * see if we get an ACK or NACK from sending
-	 * the address bits */
-	write16(addr_reg(sc), ((u16)addr << 1) | !!(bufs[0].dir == IO_IN));
+	clear_nack(sc);
+
+	/* technically we want the bus state
+	 * to be IDLE here, but, unlike what the
+	 * datasheet says, we end up in OWNED rather
+	 * than IDLE after we send a stop condition...? */
+	if (bus_state(sc) == BUS_BUSY)
+		return -EAGAIN;
+
+	/* we always start with a write transaction,
+	 * since we need to write the address register */
+	dev->tx.state = state;
+	write16(addr_reg(sc), (u16)dev->tx.addr << 1);
 	opwait(sc);
 
 	/* ensure the internal state of the module is
 	 * arranged before enabling interrupts; otherwise
 	 * an early interrupt arrival would see strange
 	 * internal state */
-	dev->tx.done = done;
-	dev->tx.uctx = uctx;
-	dev->tx.bufs = bufs;
-	dev->tx.nbufs = nbufs;
-	dev->tx.addr = addr;
 	dev_enable_irq(dev);
 	return 0;	
 }
@@ -281,7 +311,7 @@ sercom_i2c_start(struct i2c_dev *dev, i8 addr, struct mbuf *bufs, int nbufs, voi
 static void
 stop(const sercom_t sc)
 {
-	write32(sercom_ctrlb(sc), CTRLB_STOP);
+	write16(sercom_ctrlb(sc)+2, (CTRLB_ACKA|CTRLB_STOP)>>16);
 	opwait(sc);
 }
 
@@ -289,26 +319,27 @@ static void
 tx_complete(struct i2c_dev *dev, int err)
 {
 	sercom_t sc = dev_config(dev)->base;
-	void (*cb)(int, void *);
-	void *uctx;
 
-	if (read16(status_reg(sc))&STATUS_CLKHOLD)
-		stop(sc);
+	opwait(sc);
+	stop(sc);
 	dev_disable_irq(dev);
-
-	cb = dev->tx.done;
-	uctx = dev->tx.uctx;
-
-	dev->tx = (struct i2c_tx){ 0 };
-
-	/* the tx complete callback must be the very last
-	 * thing that happens on completion, because it may
-	 * arrange for another transaction to execute */
-	if (cb)
-		cb(err, uctx);
+	i2c_tx_done(&dev->tx, err);
 }
 
-/* driver interrupt routine */
+/* state-transition functions for
+ * each of the interrupt flags */
+static u8 sercom_i2c_mb_step(struct i2c_dev *dev);
+static u8 sercom_i2c_sb_step(struct i2c_dev *dev);
+
+void
+prepare_nack(sercom_t sc)
+{
+	/* the bits we need to write are in the upper half of
+	 * the regster; the lower half is read-only after
+	 * enabling the peripheral */
+	write16(sercom_ctrlb(sc)+2, CTRLB_ACKA>>16);
+}
+
 void
 sercom_i2c_master_irq(struct i2c_dev *dev)
 {
@@ -321,46 +352,85 @@ sercom_i2c_master_irq(struct i2c_dev *dev)
 	status = read16(status_reg(sc));
 
 	/* spurious? */
-	if (iflags == 0 || dev->tx.status == I2C_STATUS_NONE || dev->tx.nbufs == 0)
+	if (iflags == 0 || dev->tx.state == I2C_STATE_NONE)
 		return;
 
 	/* dev error */
-	if (status && (err = status_err(status)) < 0) {
+	if (status && (err = status_err(status, iflags)) < 0) {
 		tx_complete(dev, err);
 		return;
 	}
 
-	/* find the next buffer pointer to send/receive */
-	while (buf_ateof(dev->tx.bufs)) {
-		if (--dev->tx.nbufs == 0) {
-			/* if we were transmitting, then we're done;
-			 * we shouldn't get here in the rx path... */
-			stop(sc);
-			tx_complete(dev, 0);
-			return;
-		}
-		/* if the next buffer isn't going in the same direction as the previous
-		 * one, then we need to generate a repeated start */
-		if (dev->tx.bufs[0].dir != dev->tx.bufs[1].dir) {
-			write16(addr_reg(sc), ((u16)dev->tx.addr << 1) | !!(dev->tx.bufs[1].dir == IO_IN));
-			dev->tx.bufs++;
-			opwait(sc);
-			return;
-		}
-		dev->tx.bufs++;
-	}
+	/* ensure that we actually handle
+	 * each interrupt by asserting that
+	 * the flag cleared when the handlers
+	 * return */
+	if (iflags & INT_MB)
+		dev->tx.state = sercom_i2c_mb_step(dev);
+	else if (iflags & INT_SB)
+		dev->tx.state = sercom_i2c_sb_step(dev);
 
-	if ((iflags & INT_MB) && dev->tx.bufs[0].dir == IO_OUT) {
-		write16(data_reg(sc), (u16)buf_getc(dev->tx.bufs));
-	} else if ((iflags & INT_SB) && dev->tx.bufs[0].dir == IO_IN) {
-		/* if this is the last byte of data, send a NACK when we read it */
-		if (buf_todo(dev->tx.bufs) == 1 && dev->tx.nbufs == 1) {
-			write32(sercom_ctrlb(sc), CTRLB_ACKA);
-			opwait(sc);
-		}
-		buf_putc(dev->tx.bufs, (u8)read16(data_reg(sc)));
+	if (dev->tx.state == I2C_STATE_NONE) {
+		tx_complete(dev, 0);
+		return;
 	}
 	opwait(sc);
+	if (iflags&INT_MB)
+		assert(!(read8(intflag_reg(sc))&INT_MB));
+	if (iflags&INT_SB)
+		assert(!(read8(intflag_reg(sc))&INT_SB));
+}
+
+static u8
+sercom_i2c_mb_step(struct i2c_dev *dev)
+{
+	sercom_t sc = dev_config(dev)->base;
+
+	switch (dev->tx.state) {
+	case I2C_STATE_SEND_REG_READ:
+		write16(data_reg(sc), (u16)dev->tx.reg);
+		return I2C_STATE_RSTART_READ;
+	case I2C_STATE_SEND_REG_WRITE:
+		write16(data_reg(sc), (u16)dev->tx.reg);
+		return i2c_tx_has_more(&dev->tx) ?
+			I2C_STATE_SEND_DATA : I2C_STATE_DONE;
+	case I2C_STATE_RSTART_READ:
+		/* weird special-case: 0-byte read?
+		 * this leads us to send a STOP immediately,
+		 * which is wrong, but 0-byte reads have
+		 * unclear semantics anyway... */
+		assert(i2c_tx_has_more(&dev->tx));
+		write16(addr_reg(sc), ((u16)dev->tx.addr << 1)|1);
+		return I2C_STATE_RECV_DATA;
+	case I2C_STATE_SEND_DATA:
+		write16(data_reg(sc), (u16)i2c_tx_pop_byte(&dev->tx));
+		return i2c_tx_has_more(&dev->tx) ?
+			I2C_STATE_SEND_DATA : I2C_STATE_DONE;
+	case I2C_STATE_DONE:
+		/* last written byte was ACK'd */
+		return I2C_STATE_NONE;
+	}
+	assert(false && "unknown i2c state");
+	return I2C_STATE_NONE;
+}
+
+static u8
+sercom_i2c_sb_step(struct i2c_dev *dev)
+{
+	sercom_t sc = dev_config(dev)->base;
+
+	/* there is input data to read */
+	switch (dev->tx.state) {
+	case I2C_STATE_RECV_DATA:
+		if (i2c_tx_needs_nack(&dev->tx))
+			stop(sc);
+		i2c_tx_push_byte(&dev->tx, (u8)read16(data_reg(sc)));
+		if (!i2c_tx_has_more(&dev->tx))
+			return I2C_STATE_NONE;
+		return I2C_STATE_RECV_DATA;
+	}
+	assert(false && "unknown i2c state");
+	return I2C_STATE_NONE;
 }
 
 const struct i2c_bus_ops sercom_i2c_bus_ops = {
