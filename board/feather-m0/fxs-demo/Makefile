@@ -1,5 +1,6 @@
-objects += start.o
+objects += start.o fxas.o
 
+VPATH += ../../../dev/
 include ../../../rules.mk
 
 .PHONY: all

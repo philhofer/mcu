@@ -46,3 +46,5 @@ CONFIG_IRQ25=dac_irq_entry
 CONFIG_IRQ26=ptc_irq_entry
 CONFIG_IRQ27=i2s_irq_entry
 CONFIG_I2C=y
+CONFIG_USB=y
+CONFIG_USBSERIAL=y
