@@ -332,15 +332,6 @@ static u8 sercom_i2c_mb_step(struct i2c_dev *dev);
 static u8 sercom_i2c_sb_step(struct i2c_dev *dev);
 
 void
-prepare_nack(sercom_t sc)
-{
-	/* the bits we need to write are in the upper half of
-	 * the regster; the lower half is read-only after
-	 * enabling the peripheral */
-	write16(sercom_ctrlb(sc)+2, CTRLB_ACKA>>16);
-}
-
-void
 sercom_i2c_master_irq(struct i2c_dev *dev)
 {
 	sercom_t sc = dev_config(dev)->base;
