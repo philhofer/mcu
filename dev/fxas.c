@@ -62,6 +62,9 @@
 #define FS_500DPS  2
 #define FS_250DPS  3
 
+/* 500DPS fits within our +/- 16 rad/s scheme,
+ * so it also maintains the most precision when
+ * we perform the Q0.15 conversion */
 #define SELECTED_FS FS_500DPS
 
 #define CTRL1_RST   (1U << 6) /* software reset */
@@ -108,29 +111,31 @@ raw_to_mrad(i16 in, unsigned scale)
 	 * can multiply it by up to 2^16 without
 	 * overflowing the value
 	 *
-	 * our internal scale is 1lsb = 27.98 mdps */
+	 * our internal scale is 1lsb = 27.98 mdps
+	 *
+	 * multiplicands are computed as (mdps/27.98)*(2^15) */
 	switch (scale) {
 	case FS_2000DPS:
-		/* 62.5 mdps -> multiply by 0.447680 */
-		ext = ((ext * 4476) / 10000) + ((ext * 8) / 100000);
+		/* 62.5 mdps ... will overflow */
+		ext = (ext * 73195) >> 15;
 		break;
 	case FS_1000DPS:
-		/* 32.25 mdps -> multiply by 0.895360 */
-		ext = ((ext * 8953) / 10000) + ((ext * 6) / 100000);
+		/* 32.25 mdps ... will overflow */
+		ext = (ext * 37767) >> 15;
 		break;
 	case FS_500DPS:
-		/* 16.125 mdps -> multiply by 1.735193 */
-		ext = ((ext * 17351) / 10000) + ((ext * 93) / 1000000);
+		/* 16.125 mdps */
+		ext = (ext * 18884) >> 15;
 		break;
 	case FS_250DPS:
-		/* multiply by 3.581440 */
-		ext = ((ext * 3581) / 1000) + ((ext * 44) / 100000);
+		/* etc. */
+		ext = (ext * 9442) >> 15;
 		break;
 	}
 	if (ext > 0x7fff)
 		return 0x7fff;
-	if (ext < 0 && -ext > 0x7fff)
-		return -(i16)0x7fff;
+	if (ext < 0 && -ext > 0x10000)
+		return -0x7fff;
 	return (mrads)ext;
 }
 
