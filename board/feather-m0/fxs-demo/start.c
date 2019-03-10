@@ -56,6 +56,15 @@ print_gyro(void)
 	print(outbuf);
 }
 
+static void
+debias(struct fxas_state *state)
+{
+	/* these were my measured zero-rate biases */
+	state->gyro.x -= 18;
+	state->gyro.y -= 10;
+
+}
+
 void start(void) {
 	int err;
 	u64 starttime;
@@ -83,6 +92,8 @@ void start(void) {
 			assert(gstate.last_err == 0);
 			idle_step(true);
 		}
+		/* these were my measured gyro biases */
+		debias(&gstate);
 		print_gyro();
 	}
 }
