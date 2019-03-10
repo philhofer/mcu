@@ -16,6 +16,8 @@
 
 #define SCR_SEVONPEND (1UL << 4) /* interrupt inactive->pending creates a SEV */
 
+#define ICSR_PENDSTSET (1UL << 26) /* ICSR: systick pending */
+
 #define SYST_CSR   0xE000E010UL  /* control and status register */
 #define SYST_RVR   0xE000E014UL  /* reload value register */
 #define SYST_CVR   0xE000E018UL  /* current value register */
@@ -143,20 +145,20 @@ systick_entry(void)
 u64
 getcycles(void)
 {
-	/* TODO: handle the case in which we read the systick value
-	 * after SYST_CVR has overflowed but the interrupt has not fired
-	 * (we can just increment systicks inline...) */
-	u32 ticks;
-	u32 bits;
+	u32 ticks, bits, addend;
 
 	/* we need to ensure the value of 'ticks'
 	 * is consistent with the state of the counter register;
 	 * we want to avoid the case where we read 'ticks' just
-	 * before an overflow and SYST_CVR just after it. */
+	 * before an overflow and SYST_CVR just after it.
+	 *
+	 * similarly, if we're in a context in which the systick
+	 * interrupt is masked, pretend to observe one additional tick */
 	do {
-		ticks = systicks;
+		addend = !!(read32(SCB_ICSR)&ICSR_PENDSTSET);
+		ticks = systicks + addend;
 		bits = read32(SYST_CVR)&TICK_MASK;
-	} while (systicks != ticks);
+	} while (systicks + addend != ticks);
 
 	return ((u64)ticks << TICK_BITS) | (u64)(TICK_MASK - bits);
 }
