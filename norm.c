@@ -1,6 +1,52 @@
 #include <bits.h>
 #include <norm.h>
 
+static u32
+abs32(i32 v)
+{
+	if (v < 0)
+		return -v;
+	return v;
+}
+
+int
+scale3(i32 *a, i32 *b, i32 *c)
+{
+	u32 w = 0;
+	int shift;
+
+	w |= abs32(*a);
+	w |= abs32(*b);
+	w |= abs32(*c);
+	shift = 16 - __builtin_clz(w);
+	if (shift <= 0)
+		return 0;
+	*a >>= shift;
+	*b >>= shift;
+	*c >>= shift;
+	return shift;
+}
+
+int
+scale4(i32 *a, i32 *b, i32 *c, i32 *d)
+{
+	u32 w = 0;
+	int shift;
+
+	w |= abs32(*a);
+	w |= abs32(*b);
+	w |= abs32(*c);
+	w |= abs32(*d);
+	shift = 16 - __builtin_clz(w);
+	if (shift <= 0)
+		return 0;
+	*a >>= shift;
+	*b >>= shift;
+	*c >>= shift;
+	*d >>= shift;
+	return shift;
+}
+
 /* compute (num * scale) / 2^(exp/2)
  *       = (num * sclae) * 2^-(exp/2)
  *       = (num * scale) * 2^-(exp>>2 * 2) * 2^-((exp&1)/2)
@@ -139,3 +185,13 @@ recipsqrt(u32 v, int *point)
 	return x;
 }
 
+/* slow-path (assuming 32-bit hardware) */
+i32
+__unit_mul_slow(i32 a, i32 b)
+{
+	i64 rv;
+
+	rv = (i64)a * (i64)b;
+	rv >>= 15;
+	return rv;
+}
