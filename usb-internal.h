@@ -70,16 +70,14 @@ struct usb_class {
 	const void *confdesc; /* config descriptor */
 	ulong       conflen;  /* config descriptor length */
 
-	/* handlers for class-specific setup packets */
+	/* handle_setup() should handle a class-specific
+	 * setup packet. If the packet isn't handled, the
+	 * routine should return a negative error code. */
 	int (*handle_setup)(struct usb_dev *dev, struct usb_setup *setup);
 
-	/* handle a driver reset */
+	/* handle_reset() should reset all of the class
+	 * endpoints to their initial state */
 	void (*handle_reset)(struct usb_dev *dev);
-
-	/* handle class-specific endpoint start and end;
-	 * called by USB driver in interrupt context; these
-	 * can in turn call expect_out() or expect_in() again
-	 * on the usb_dev struct */
 
 	/* ep_rx() is called after data has
 	 * been received due to a host OUT packet */

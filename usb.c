@@ -12,10 +12,10 @@
  * 'status' packets (zero-length IN or OUT packets).
  * The way we manage this is by calling
  * either expect_out() or expect_in() on the driver,
- * and setting on_out() or on_in() to whatever code
+ * and setting ep0_out() or ep0_in() to whatever code
  * needs to be executed when that happens. Generally
  * the end of that chain of callbacks should call
- * ep0_default(), which stalls the endpoint */
+ * ep0_default(), which does nothing (yet). */
 
 static inline void ep0_default(struct usb_dev *dev);
 
@@ -30,7 +30,7 @@ usb_ignore_out(struct usb_dev *dev)
 }
 
 /* expect a zero-length IN status packet */
-static inline void
+static void
 expect_in_zlp(struct usb_dev *dev)
 {
 	dev->ep0_in = ep0_default;
@@ -38,7 +38,7 @@ expect_in_zlp(struct usb_dev *dev)
 }
 
 /* expect a zero-length OUT status packet */
-static inline void
+static void
 expect_out_zlp(struct usb_dev *dev)
 {
 	dev->ep0_out = ep0_default;
@@ -209,12 +209,6 @@ handle_get_status(struct usb_dev *dev)
 	uchar buf[2] = {0};
 	usb_ep0_queue_response(dev, buf, 2);
 	return 0;
-}
-
-void
-usb_unhandled(unsigned n)
-{
-	/* for gdb dprintf */
 }
 
 static inline int
