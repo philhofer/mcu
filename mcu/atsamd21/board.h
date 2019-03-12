@@ -48,6 +48,11 @@
 #define USB_PINROLE   6
 #define USB_IRQ_NUM   7
 
+/* EIC peripheral configuration */
+#define EIC_MAX     18
+#define EIC_IRQ_NUM 4
+#define EIC_PINROLE 0
+
 /* values for GENCTRL.SRC */
 #define CLK_SRC_XOSC      0x0
 #define CLK_SRC_GCLKIN    0x1 /* generator input pad */

@@ -1,8 +1,10 @@
 #include <bits.h>
 #include <arch.h>
 #include <i2c.h>
+#include <gpio.h>
 #include <error.h>
 #include <gyro.h>
+#include <extirq.h>
 #include <dev/fxas.h>
 
 #define DEV_ADDR   0x21
@@ -139,21 +141,6 @@ raw_to_mrad(i16 in, unsigned scale)
 	return (mrads)ext;
 }
 
-/*
-struct i2cfunc {
-	u8 in;
-	u8 reg;
-	u8 value;
-}
-
-
-const struct i2cfunc init_sequence[3] = {
-	{.in = true,  .reg = WHO_AM_I,  .value = WHO_AM_I},
-	{.in = false, .reg = CTRL_REG0, .value = CTRL0_BW(0)|CTRL0_FS(SELECTED_FS)},
-	{.in = false, .reg = CTRL_REG1, .value = CTRL1_ACTIVE|CTRL1_READY|CTRL1_ODR(ODR_200HZ)}
-};
-*/
-
 int
 fxas_enable(struct i2c_dev *dev)
 {
@@ -193,4 +180,19 @@ int
 fxas_read_state(struct i2c_dev *dev, struct fxas_state *dst)
 {
 	return i2c_read_reg(dev, DEV_ADDR, 1, dst->buf, 6, fxas_post_tx, dst);
+}
+
+int
+fxas_attach_drdy(struct i2c_dev *dev, unsigned pin)
+{
+	int err;
+	u8 v;
+
+	/* configure DRDY as push-pull/active-low */
+	v = CTRL2_INT_DRDY;
+	err = i2c_write_sync(dev, DEV_ADDR, CTRL_REG2, &v, 1);
+	if (err)
+		return err;
+
+	return extirq_configure(pin, TRIG_LOW, 0);
 }

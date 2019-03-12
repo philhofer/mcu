@@ -4,6 +4,7 @@
 #include <error.h>
 #include <gpio.h>
 #include <drivers/gpio.h>
+#include <drivers/sam/port.h>
 
 #define PORT_DIR      0x0
 #define PORT_DIRCLR   0x4
@@ -54,7 +55,7 @@ port_pincfg_reg8(u8 group, unsigned pin)
 }
 
 int
-port_pmux_pin(u8 group, u8 pin, u8 role)
+port_pmux_pin(unsigned group, unsigned pin, uchar role)
 {
 	ulong reg;
 	u8 mask;
@@ -76,20 +77,19 @@ port_pmux_pin(u8 group, u8 pin, u8 role)
 
 	/* turn it on */
 	write8(port_pincfg_reg8(group, pin), PINCFG_MUXEN);
-
 	return 0;
 }
 
 static unsigned
 gp_pinnum(const struct gpio *gp)
 {
-	return gp->driver.number & 0xff;
+	return PORT_NUM(gp->driver.number);
 }
 
 static unsigned
 gp_pingrp(const struct gpio *gp)
 {
-	return gp->driver.number >> 8;
+	return PORT_GROUP(gp->driver.number);
 }
 
 static int
@@ -173,3 +173,15 @@ const struct gpio_ops port_gpio_ops = {
 	.get = port_read,
 	.toggle = port_toggle,
 };
+
+unsigned
+port_eic_num(unsigned group, unsigned num)
+{
+	/* for the SAMD21 at least, the EIC line
+	 * is just the lowest 4 bits of the pin
+	 * number, EXCEPT for the SWCLK/SWIO pins
+	 * and the USB DM/DP pins, but who is
+	 * using those for generating interrupts...?
+	 * TODO: double-check this is true on other SAM boards */
+	return (num & 0xf);
+}

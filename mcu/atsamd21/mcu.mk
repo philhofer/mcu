@@ -16,6 +16,10 @@ ifeq ($(CONFIG_USB), y)
 	objects += sam-usb.o
 endif
 
+ifeq ($(CONFIG_EXTIRQ), y)
+	objects += eic.o
+endif
+
 userrow.elf: userrow.o | userrow.ld
 	$(LD) -T $| -o $@ $^
 
