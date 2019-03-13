@@ -11,23 +11,25 @@
 #include <feather-m0-i2c.h>
 #include <feather-m0-pins.h>
 #include <dev/fxas.h>
+#include <dev/fxos.h>
 #include <red-led.h>
 
-struct fxas_state gstate;
+struct fxas_state gstate; /* gyro state */
+struct fxos_state mstate; /* mag/accel state */
 
 /* three 6-character numbers, two commas, a newline, and a null */
-static char outbuf[6*3 + 2 + 1 + 1];
+static char outbuf[1 + 6*3 + 2 + 1 + 1];
 
 static void
-print_gyro(void)
+print_xyz(uchar prefix, i16 *m)
 {
 	char *p = outbuf;
-	mrads *m, v;
+	i16 v;
 	int i;
 
-	m = &gstate.gyro.x;
+	*p++ = prefix;
 	for (i=0; i<3; i++) {
-		v = *m++;
+		v = m[i];
 		if (v < 0) {
 			*p++ = '-';
 			v = -v;
@@ -64,6 +66,7 @@ debias(struct fxas_state *state)
 /* select the pin adjacent to SDA/SCL
  * as the gyro data ready interrupt line */
 #define FXAS_DRDY_PIN PIN_A0
+#define FXOS_DRDY_PIN PIN_A1
 
 static void
 gyro_drdy(void)
@@ -79,9 +82,19 @@ gyro_drdy(void)
 	assert(err == 0);
 }
 
+static void
+accel_drdy(void)
+{
+	int err;
+
+	err = fxos_read_state(&default_i2c, &mstate);
+	assert(err == 0);
+}
+
 /* global external interrupt table */
-void (* const extirq_table[EIC_MAX])(void) = {
-	[EIC_NUM(FXAS_DRDY_PIN)] = gyro_drdy,
+const struct extirq extirq_table[EIC_MAX] = {
+	[EIC_NUM(FXAS_DRDY_PIN)] = {.func = gyro_drdy,  .trig = FXAS_DRDY_TRIGGER, .pin = FXAS_DRDY_PIN},
+	[EIC_NUM(FXOS_DRDY_PIN)] = {.func = accel_drdy, .trig = FXOS_DRDY_TRIGGER, .pin = FXOS_DRDY_PIN},
 };
 
 void start(void) {
@@ -99,7 +112,10 @@ void start(void) {
 	err = fxas_enable(&default_i2c);
 	assert(err == 0);
 
-	err = fxas_attach_drdy(&default_i2c, FXAS_DRDY_PIN);
+	err = fxos_enable(&default_i2c);
+	assert(err == 0);
+
+	err = extirq_init();
 	assert(err == 0);
 
 	/* initialization complete */
@@ -112,7 +128,14 @@ void start(void) {
 			assert(gstate.last_err == 0);
 			idle_step(true);
 		}
+		extirq_clear_enable(FXOS_DRDY_PIN);
 		debias(&gstate);
-		print_gyro();
+		print_xyz('G', &gstate.gyro.x);
+		while (mstate.last_update < starttime) {
+			assert(mstate.last_err == 0);
+			idle_step(true);
+		}
+		print_xyz('A', &mstate.accel.x);
+		print_xyz('M', &mstate.mag.x);
 	}
 }

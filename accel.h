@@ -1,5 +1,6 @@
 #ifndef __ACCEL_H_
 #define __ACCEL_H_
+#include <bits.h>
 
 /* mgs hold a fixed-point accelerometer
  * reading between [-8,8) Gs, so the

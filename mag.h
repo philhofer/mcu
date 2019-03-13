@@ -1,5 +1,6 @@
 #ifndef __MAG_H_
 #define __MAG_H_
+#include <bits.h>
 
 /* mag_state holds magnetometer data
  * in three axes in units of 0.1uT per lsb

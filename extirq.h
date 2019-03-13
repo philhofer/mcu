@@ -24,17 +24,26 @@ enum trigger {
 	TRIG_LOW,  /* level trigger low */
 };
 
+struct extirq {
+	void (*func)(void);
+	enum trigger trig;
+	unsigned pin;
+};
+
 /* extirq_table[] holds the table of external
  * interrupt handlers. */
-extern void (* const extirq_table[])(void);
+extern const struct extirq extirq_table[];
 
 /* extirq_configure() configures an external interrupt source
  * to trigger an interrupt with the given trigger type.
  *
  * Software can receive the interrupt by implementing
  * a function named 'extirq_n()' (the external interrupt
- * table is resolved at link-time) */
+ * table is resolved at link-time) 
 int extirq_configure(unsigned pin, enum trigger trig, int flags);
+*/
+
+int extirq_init(void);
 
 /* extirq_enable() unmasks the interrupt handling
  * routine for an external interrupt handler */

@@ -159,7 +159,14 @@ fxas_enable(struct i2c_dev *dev)
 		return err;
 
 	v = CTRL1_ACTIVE|CTRL1_READY|CTRL1_ODR(ODR_200HZ);
-	return i2c_write_sync(dev, DEV_ADDR, CTRL_REG1, &v, 1);
+	err = i2c_write_sync(dev, DEV_ADDR, CTRL_REG1, &v, 1);
+	if (err < 0)
+		return err;
+
+	/* configure DRDY as push-pull / active-low */
+	v = CTRL2_INT_DRDY;
+	err = i2c_write_sync(dev, DEV_ADDR, CTRL_REG2, &v, 1);
+	return err;
 }
 
 static void
@@ -182,17 +189,3 @@ fxas_read_state(struct i2c_dev *dev, struct fxas_state *dst)
 	return i2c_read_reg(dev, DEV_ADDR, 1, dst->buf, 6, fxas_post_tx, dst);
 }
 
-int
-fxas_attach_drdy(struct i2c_dev *dev, unsigned pin)
-{
-	int err;
-	u8 v;
-
-	/* configure DRDY as push-pull/active-low */
-	v = CTRL2_INT_DRDY;
-	err = i2c_write_sync(dev, DEV_ADDR, CTRL_REG2, &v, 1);
-	if (err)
-		return err;
-
-	return extirq_configure(pin, TRIG_LOW, 0);
-}

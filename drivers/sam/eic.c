@@ -69,35 +69,34 @@ eic_set_config(unsigned num, enum trigger trig)
 }
 
 int
-extirq_configure(unsigned pin, enum trigger trig, int flags)
+extirq_init(void)
 {
-	unsigned num;
-	u32 mask, reg;
+	const struct extirq *ei;
+	unsigned num, mask;
+	u32 reg;
 	int err;
-
-	num = EIC_NUM(pin);
-	if (num > EIC_MAX)
-		return -EINVAL;
-
-	mask = 1U << num;
-	if ((err = port_pmux_pin(PORT_GROUP(pin), PORT_NUM(pin), EIC_PINROLE)) < 0)
-		return err;
 
 	gclk_enable_clock(CLK_GEN_ULP32K, CLK_DST_EIC);
 
-	/* fail if we've already claimed this EIC number */
-	reg = read32(EIC_BASE + EIC_WAKEUP);
-	if (reg&mask)
-		return -EINVAL;
-	write32(EIC_BASE + EIC_WAKEUP, reg|mask);
+	for (int i=0; i<EIC_MAX; i++) {
+		ei = &extirq_table[i];
+		if (!ei->func || !ei->trig)
+			continue;
+		num = EIC_NUM(ei->pin);
+		if (num != i)
+			return -EINVAL;
+		mask = 1U << num;
+		if ((err = port_pmux_pin(PORT_GROUP(ei->pin), PORT_NUM(ei->pin), EIC_PINROLE)) < 0)
+			return err;
 
-	eic_set_config(num, trig);
+		reg = read32(EIC_BASE + EIC_WAKEUP);
+		if (reg&mask)
+			return -EINVAL;
+		write32(EIC_BASE + EIC_WAKEUP, reg|mask);
+		eic_set_config(num, ei->trig);
+	}
+	write32(EIC_BASE + EIC_INTFLAG, 0xffffffff);
 	eic_enable();
-
-	/* errata 1.9.1 -- some configuration 
-	 * steps may cause a spurious interrupt
-	 * flag to be raised */
-	write32(EIC_BASE + EIC_INTFLAG, mask);
 	irq_enable_num(EIC_IRQ_NUM);
 	return 0;
 }
@@ -138,6 +137,9 @@ eic_irq_entry(void)
 	u32 iflags;
 
 	iflags = read32(EIC_BASE + EIC_INTFLAG);
+	/* make sure we don't respond to masked
+	 * external interrupts when others are unmasked */
+	iflags &= read32(EIC_BASE + EIC_INTENSET);
 	if (!iflags)
 		return;
 
@@ -148,8 +150,8 @@ eic_irq_entry(void)
 	write32(EIC_BASE + EIC_INTENCLR, iflags);
 	write32(EIC_BASE + EIC_INTFLAG, iflags);
 	for (i=0; i<EIC_MAX && iflags; i++) {
-		if ((iflags&1) && extirq_table[i])
-			extirq_table[i]();
+		if ((iflags&1) && extirq_table[i].func)
+			extirq_table[i].func();
 		iflags >>= 1;
 	}
 }
