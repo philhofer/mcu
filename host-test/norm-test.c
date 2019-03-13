@@ -50,6 +50,22 @@ int main(void) {
 			return 1;
 		}
 
+		if (!unit_approx(geomean2(a, b), geomean2(geomean2(a, b), 0))) {
+			printf("geomean2(%d, %d) = %d\n", a, b, geomean2(a, b));
+			printf("geomean2(%d, 0)  = %d\n", geomean2(a, b), geomean2(geomean2(a, b), 0));
+			return 1;
+		}
+
+		/* if we normalize the a+b components into 'a' using geomean2,
+		 * then normalizing the whole vector should have no effect */
+		a = geomean2(a, b);
+		b = 0;
+		norm3(&a, &b, &c);
+		if (!unit_approx(c, want)) {
+			printf("want _, 0, %d; got %d, %d, %d\n", want, a, b, c);
+			return 1;
+		}
+
 		/* for 4-vectors, the unit vector should be
 		 *   a = b = c = d = +/- 1/2 */
 		a = b = c = d = i;

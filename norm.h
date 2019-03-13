@@ -24,6 +24,8 @@
 
 /* NORM_ONE is the maximum positive Q0.15 value */
 #define NORM_ONE       0x7fff
+/* NORM_HALF is 1/2 in Q0.15 */
+#define NORM_HALF      16384
 
 /* 'unit' is a fixed-point (0.15) signed
  * number representing a value in the
@@ -44,18 +46,20 @@ int scale4(i32 *a, i32 *b, i32 *c, i32 *d);
 void norm3(i32 *a, i32 *b, i32 *c);
 void norm4(i32 *a, i32 *b, i32 *c, i32 *d);
 
+i16 geomean2(i32 a, i32 b);
+
 /* slow-path fallback for 32x32->64 multiplication */
 i32 __unit_mul_slow(i32, i32);
 
-/* unit_mul() performs a signed Qx.15 multiplication */
+/* unit_mul() performs a signed Qx.15 multiplication
+ * with rounding towards zero */
 static inline i32
 unit_mul(i32 a, i32 b)
 {
 	i32 prod;
 	if (__builtin_mul_overflow(a, b, &prod))
 		return __unit_mul_slow(a, b);
-	prod >>= 15;
-	return prod;
+	return (prod+NORM_HALF) >> 15;
 }
 
 #endif

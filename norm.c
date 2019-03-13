@@ -47,19 +47,52 @@ scale4(i32 *a, i32 *b, i32 *c, i32 *d)
 	return shift;
 }
 
+static u16
+sqrt32(u32 v)
+{
+	u32 x, ad = 0;
+
+	x = 1U << (30-(__builtin_clz(v)&~3));
+	while (x) {
+		if (v > (ad + x)) {
+			v -= ad + x;
+			ad += x << 1;
+		}
+		ad >>= 1;
+		x >>= 2;
+	}
+	if (v > ad)
+		ad++;
+	return ad;
+}
+
+i16
+geomean2(i32 a, i32 b)
+{
+	i32 rv;
+	u32 mag;
+
+	mag = (u32)(a * a) + (u32)(b * b);
+	if (mag == 0)
+		return 0;
+	rv = sqrt32(mag);
+	return (i16)rv;
+}
+
 /* compute (num * scale) / 2^(exp/2)
- *       = (num * sclae) * 2^-(exp/2)
+ *       = (num * scale) * 2^-(exp/2)
  *       = (num * scale) * 2^-(exp>>2 * 2) * 2^-((exp&1)/2)
- * handling the fractional exponent */
+ * handling the fractional exponent
+ * and rounding towards zero */
 static i32
 fp_scale(i32 num, i32 scale, unsigned exp)
 {
 	i32 rv, p;
 	p = num * scale;
-	rv = p >> (exp>>1);
+	rv = (p + (1 << (exp>>2))) >> (exp>>1);
 	/* 23170 = sqrt(2) in Q.15 */
 	if (exp&1)
-		rv = (rv * 23170)>>15;
+		rv = unit_mul(rv, 23170);
 	return rv;
 }
 
@@ -192,6 +225,7 @@ __unit_mul_slow(i32 a, i32 b)
 	i64 rv;
 
 	rv = (i64)a * (i64)b;
+	rv += NORM_HALF;
 	rv >>= 15;
 	return rv;
 }

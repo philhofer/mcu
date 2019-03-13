@@ -29,6 +29,8 @@ cdc-acm-test: cdc-acm-test.o idle.o arch.o usb.o usb-cdc-acm.o usb-loopback.o
 
 norm-test: norm.o
 
+madgwick-test: madgwick.o madgwick-ref.o norm.o
+
 .DEFAULT_GOAL := all
 .PHONY: all clean
 all: $(wildcard *-test)
