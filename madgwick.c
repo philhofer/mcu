@@ -48,10 +48,10 @@ madgwick(struct madgwick_state *state, const struct gyro_state *gyro, const stru
 	i32 twob_zquat2 = 2 * unit_mul(state->flux_z, quat2);
 	i32 twob_zquat3 = 2 * unit_mul(state->flux_z, quat3);
 	i32 quat0quat1;
-	i32 quat0quat2 = unit_mul(quat0, quat2);
+	i32 quat0quat2 = unit_mul_short(quat0, quat2);
 	i32 quat0quat3;
 	i32 quat1quat2;
-	i32 quat1quat3 = unit_mul(quat1, quat3);
+	i32 quat1quat3 = unit_mul_short(quat1, quat3);
 	i32 quat2quat3;
 	i32 twom_x = 2 * (i32)mag->x;
 	i32 twom_y = 2 * (i32)mag->y;
@@ -69,12 +69,15 @@ madgwick(struct madgwick_state *state, const struct gyro_state *gyro, const stru
 	m_z = (i32)mag->z;
 	norm3(&m_x, &m_y, &m_z);
 
-	/* compute the objective function and Jacobian */
+	/* compute the objective function and Jacobian;
+	 *
+	 * use short multiplies when multiplying unscaled versor
+	 * components, as we know those have been scaled to Q0.15 */
 	f0 = unit_mul(twoquat1, quat3) - unit_mul(twoquat0, quat2) - a_x;
 	f1 = unit_mul(twoquat0, quat1) + unit_mul(twoquat2, quat3) - a_y;
 	f2 = (1U<<15) - unit_mul(twoquat1, quat1) - unit_mul(twoquat2, quat2) - a_z;
-	f3 = unit_mul(twob_x, (0x4000 - unit_mul(quat2, quat2)) - unit_mul(quat3, quat3)) + unit_mul(twob_z, (quat1quat3 - quat0quat2)) - m_x;
-	f4 = unit_mul(twob_x, (unit_mul(quat1, quat2) - unit_mul(quat0, quat3))) + unit_mul(twob_z, (unit_mul(quat0, quat1) + unit_mul(quat2, quat3))) - m_y;
+	f3 = unit_mul(twob_x, (0x4000 - unit_mul_short(quat2, quat2)) - unit_mul_short(quat3, quat3)) + unit_mul(twob_z, (quat1quat3 - quat0quat2)) - m_x;
+	f4 = unit_mul(twob_x, (unit_mul_short(quat1, quat2) - unit_mul_short(quat0, quat3))) + unit_mul(twob_z, (unit_mul_short(quat0, quat1) + unit_mul_short(quat2, quat3))) - m_y;
 	f5 = unit_mul(twob_x, (quat0quat2 + quat1quat3)) + unit_mul(twob_z, (0x4000 - unit_mul(quat1, quat1) - unit_mul(quat2, quat2))) - m_z;
 	J11or24 = twoquat2;
 	J12or23 = 2 * quat3;
@@ -99,7 +102,6 @@ madgwick(struct madgwick_state *state, const struct gyro_state *gyro, const stru
 	qhatdot1 = unit_mul(J12or23, f0) + unit_mul(J13or22, f1) - unit_mul(J32, f2) + unit_mul(J42, f3) + unit_mul(J52, f4) + unit_mul(J62, f5);
 	qhatdot2 = unit_mul(J12or23, f1) - unit_mul(J33, f2) - unit_mul(J13or22, f0) - unit_mul(J43, f3) + unit_mul(J53, f4) + unit_mul(J63, f5);
 	qhatdot3 = unit_mul(J14or21, f0) + unit_mul(J11or24, f1) - unit_mul(J44, f3) - unit_mul(J54, f4) + unit_mul(J64, f5);
-	// normalise the gradient to estimate direction of the gyroscope error
 	scale4(&qhatdot0, &qhatdot1, &qhatdot2, &qhatdot3);
 	norm4(&qhatdot0, &qhatdot1, &qhatdot2, &qhatdot3);
 
@@ -122,7 +124,11 @@ madgwick(struct madgwick_state *state, const struct gyro_state *gyro, const stru
 
 	/* compute the quaternion rate measured by gyroscopes;
 	 * since the gyroscopes measure [-16,16) rads, we need to scale
-	 * up the input */
+	 * up the input
+	 *
+	 * TODO: there is an opportunity here to CAREFULLY use
+	 * short multiplies, since we know that w_[xyz] and halfquat[0123]
+	 * are both scaled to Q0.15 at this point */
 	w_x = (i32)gyro->x << 4;
 	w_y = (i32)gyro->y << 4;
 	w_z = (i32)gyro->z << 4;
@@ -130,11 +136,14 @@ madgwick(struct madgwick_state *state, const struct gyro_state *gyro, const stru
 	qdot_omega1 = unit_mul(halfquat0, w_x) + unit_mul(halfquat2, w_z) - unit_mul(halfquat3, w_y);
 	qdot_omega2 = unit_mul(halfquat0, w_y) - unit_mul(halfquat1, w_z) + unit_mul(halfquat3, w_x);
 	qdot_omega3 = unit_mul(halfquat0, w_z) + unit_mul(halfquat1, w_y) - unit_mul(halfquat2, w_x);
-	/* compute then integrate the estimated quaternion rate */
-	quat0 += unit_mul(qdot_omega0 - unit_mul(state->beta, qhatdot0), tstep);
-	quat1 += unit_mul(qdot_omega1 - unit_mul(state->beta, qhatdot1), tstep);
-	quat2 += unit_mul(qdot_omega2 - unit_mul(state->beta, qhatdot2), tstep);
-	quat3 += unit_mul(qdot_omega3 - unit_mul(state->beta, qhatdot3), tstep);
+	/* compute then integrate the estimated quaternion rate
+	 *
+	 * use short multiplication when multiplying qhatdot by beta;
+	 * qhatdot has been normalized to Q0.15 */
+	quat0 += unit_mul(qdot_omega0 - unit_mul_short(state->beta, qhatdot0), tstep);
+	quat1 += unit_mul(qdot_omega1 - unit_mul_short(state->beta, qhatdot1), tstep);
+	quat2 += unit_mul(qdot_omega2 - unit_mul_short(state->beta, qhatdot2), tstep);
+	quat3 += unit_mul(qdot_omega3 - unit_mul_short(state->beta, qhatdot3), tstep);
 	scale4(&quat0, &quat1, &quat2, &quat3);
 	norm4(&quat0, &quat1, &quat2, &quat3);
 	state->quat0 = quat0;
@@ -145,16 +154,20 @@ madgwick(struct madgwick_state *state, const struct gyro_state *gyro, const stru
 	/* compute flux in the earth frame
 	 * and normalize the earth flux so that it
 	 * only has x and z components (in other words,
-	 * it has the same inclination as the measured flux) */
-	quat0quat1 = unit_mul(quat0, quat1);
-	quat0quat2 = unit_mul(quat0, quat2);
-	quat0quat3 = unit_mul(quat0, quat3);
-	quat2quat3 = unit_mul(quat2, quat3);
-	quat1quat2 = unit_mul(quat1, quat2);
-	quat1quat3 = unit_mul(quat1, quat3);
-	h_x = unit_mul(twom_x, (0x4000 - unit_mul(quat2, quat2) - unit_mul(quat3, quat3))) + unit_mul(twom_y, (quat1quat2 - quat0quat3)) + unit_mul(twom_z, (quat1quat3 + quat0quat2));
-	h_y = unit_mul(twom_x, (quat1quat2 + quat0quat3)) + unit_mul(twom_y, (0x4000 - unit_mul(quat1, quat1) - unit_mul(quat3, quat3))) + unit_mul(twom_z, (quat2quat3 - quat0quat1));
-	h_z = unit_mul(twom_x, (quat1quat3 - quat0quat2)) + unit_mul(twom_y, (quat2quat3 + quat0quat1)) + unit_mul(twom_z, (0x4000 - unit_mul(quat1, quat1) - unit_mul(quat2, quat2)));
+	 * it has the same inclination as the measured flux)
+	 *
+	 * can cheat a bit and use short multiplication here
+	 * because the quaternion has just been normalized, so
+	 * everything is in Q0.15 by definition */
+	quat0quat1 = unit_mul_short(quat0, quat1);
+	quat0quat2 = unit_mul_short(quat0, quat2);
+	quat0quat3 = unit_mul_short(quat0, quat3);
+	quat2quat3 = unit_mul_short(quat2, quat3);
+	quat1quat2 = unit_mul_short(quat1, quat2);
+	quat1quat3 = unit_mul_short(quat1, quat3);
+	h_x = unit_mul(twom_x, (0x4000 - unit_mul_short(quat2, quat2) - unit_mul_short(quat3, quat3))) + unit_mul(twom_y, (quat1quat2 - quat0quat3)) + unit_mul(twom_z, (quat1quat3 + quat0quat2));
+	h_y = unit_mul(twom_x, (quat1quat2 + quat0quat3)) + unit_mul(twom_y, (0x4000 - unit_mul_short(quat1, quat1) - unit_mul_short(quat3, quat3))) + unit_mul(twom_z, (quat2quat3 - quat0quat1));
+	h_z = unit_mul(twom_x, (quat1quat3 - quat0quat2)) + unit_mul(twom_y, (quat2quat3 + quat0quat1)) + unit_mul(twom_z, (0x4000 - unit_mul_short(quat1, quat1) - unit_mul_short(quat2, quat2)));
 	state->flux_x = geomean2(h_x, h_y);
 	state->flux_z = h_z;
 }
