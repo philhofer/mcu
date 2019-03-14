@@ -8,6 +8,8 @@
 #include <extirq.h>
 #include <libc.h>
 #include <default-usb.h>
+#include <usb-cdc-acm.h>
+#include <madgwick.h>
 #include <feather-m0-i2c.h>
 #include <feather-m0-pins.h>
 #include <dev/fxas.h>
@@ -17,18 +19,17 @@
 struct fxas_state gstate; /* gyro state */
 struct fxos_state mstate; /* mag/accel state */
 
-/* three 6-character numbers, two commas, a newline, and a null */
-static char outbuf[1 + 6*3 + 2 + 1 + 1];
-
 static void
-print_xyz(uchar prefix, i16 *m)
+print_axyz(i16 *m)
 {
+	/* four 6-character numbers, three commas, and a carriage return */
+	char outbuf[6*4 + 3 + 1];
 	char *p = outbuf;
 	i16 v;
 	int i;
 
-	*p++ = prefix;
-	for (i=0; i<3; i++) {
+	*p++ = '\r';
+	for (i=0; i<4; i++) {
 		v = m[i];
 		if (v < 0) {
 			*p++ = '-';
@@ -45,12 +46,14 @@ print_xyz(uchar prefix, i16 *m)
 		v /= 10;
 		*--p = '0' + v;
 		p += 5;
-		if (i != 2)
+		if (i != 3)
 			*p++ = ',';
 	}
-	*p++ = '\n';
-	*p++ = 0;
-	print(outbuf);
+	/* deliberately ignore errors here;
+	 * we'll get -EAGAIN if the host isn't reading fast
+	 * enough, but we need to continue doing orientation
+	 * updates regardless */
+	acm_odev_write(&usbttyout, outbuf, p - outbuf);
 }
 
 static void
@@ -100,11 +103,14 @@ const struct extirq extirq_table[EIC_MAX] = {
 void start(void) {
 	int err;
 	u64 starttime;
+	struct madgwick_state mw;
 
 	gpio_reset(&red_led, GPIO_OUT);
 	gpio_write(&red_led, 0);
 
 	usb_init(&default_usb);
+
+	madgwick_init(&mw, 10);
 
 	err = i2c_dev_reset(&default_i2c, I2C_SPEED_NORMAL);
 	assert(err == 0);
@@ -130,12 +136,13 @@ void start(void) {
 		}
 		extirq_clear_enable(FXOS_DRDY_PIN);
 		debias(&gstate);
-		print_xyz('G', &gstate.gyro.x);
 		while (mstate.last_update < starttime) {
 			assert(mstate.last_err == 0);
 			idle_step(true);
 		}
-		print_xyz('A', &mstate.accel.x);
-		print_xyz('M', &mstate.mag.x);
+		/* TODO: actually calculate the time-delta here instead
+		 * of assuming that we are always doing 200Hz... */
+		madgwick(&mw, &gstate.gyro, &mstate.accel, &mstate.mag, (32768/200));
+		print_axyz(&mw.quat0);
 	}
 }

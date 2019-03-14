@@ -48,18 +48,17 @@ void norm4(i32 *a, i32 *b, i32 *c, i32 *d);
 
 i16 geomean2(i32 a, i32 b);
 
-/* slow-path fallback for 32x32->64 multiplication */
-i32 __unit_mul_slow(i32, i32);
-
 /* unit_mul() performs a signed Qx.15 multiplication
  * with rounding towards zero */
+i32 unit_mul(i32 a, i32 b);
+
+/* unit_mul_short() performs Q0.15 multiplication
+ *
+ * the input operands _must_ be in Q0.15 format */
 static inline i32
-unit_mul(i32 a, i32 b)
+unit_mul_short(i32 a, i32 b)
 {
-	i32 prod;
-	if (__builtin_mul_overflow(a, b, &prod))
-		return __unit_mul_slow(a, b);
-	return (prod+NORM_HALF) >> 15;
+	return (a*b + NORM_HALF)>>15;
 }
 
 #endif

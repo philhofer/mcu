@@ -22,7 +22,7 @@ madgwick(struct madgwick_state *state, const struct gyro_state *gyro, const stru
 	i32 J11or24, J12or23, J13or22, J14or21, J32, J33,
 	J41, J42, J43, J44, J51, J52, J53, J54, J61, J62, J63, J64;
 	i32 qhatdot0, qhatdot1, qhatdot2, qhatdot3;
-	/* i32 w_err_x, w_err_y, w_err_z; */
+	/* unused: i32 w_err_x, w_err_y, w_err_z; */
 	i32 h_x, h_y, h_z;
 	i32 w_x, w_y, w_z;
 	i32 quat0 = (i32)state->quat0;
@@ -36,7 +36,7 @@ madgwick(struct madgwick_state *state, const struct gyro_state *gyro, const stru
 	i32 twoquat0 = 2 * quat0;
 	i32 twoquat1 = 2 * quat1;
 	i32 twoquat2 = 2 * quat2;
-	/* i32 twoquat3 = 2 * quat3; */
+	/* unused: i32 twoquat3 = 2 * quat3; */
 	i32 twob_x = 2 * (i32)state->flux_x;
 	i32 twob_z = 2 * (i32)state->flux_z;
 	i32 twob_xquat0 = 2 * unit_mul(state->flux_x, quat0);
@@ -57,14 +57,12 @@ madgwick(struct madgwick_state *state, const struct gyro_state *gyro, const stru
 	i32 twom_y = 2 * (i32)mag->y;
 	i32 twom_z = 2 * (i32)mag->z;
 
-	/* normalise the accelerometer measurement */
 	i32 a_x, a_y, a_z;
 	a_x = (i32)accel->x;
 	a_y = (i32)accel->y;
 	a_z = (i32)accel->z;
 	norm3(&a_x, &a_y, &a_z);
 
-	/* normalise the magnetometer measurement */
 	i32 m_x, m_y, m_z;
 	m_x = (i32)mag->x;
 	m_y = (i32)mag->y;
@@ -114,17 +112,17 @@ madgwick(struct madgwick_state *state, const struct gyro_state *gyro, const stru
 	w_err_x = unit_mul(twoquat0, qhatdot1) - unit_mul(twoquat1, qhatdot0) - unit_mul(twoquat2, qhatdot3) + unit_mul(twoquat3, qhatdot2);
 	w_err_y = unit_mul(twoquat0, qhatdot2) + unit_mul(twoquat1, qhatdot3) - unit_mul(twoquat2, qhatdot0) - unit_mul(twoquat3, qhatdot1);
 	w_err_z = unit_mul(twoquat0, qhatdot3) - unit_mul(twoquat1, qhatdot2) + unit_mul(twoquat2, qhatdot1) - unit_mul(twoquat3, qhatdot0);
-	w_bx += w_err_x * deltat * mw->zeta;
-	w_by += w_err_y * deltat * mw->zeta;
-	w_bz += w_err_z * deltat * mw->zeta;
+	w_bx += unit_mul(unit_mul(w_err_x, state->zeta), deltat);
+	w_by += unit_mul(unit_mul(w_err_y, state->zeta), deltat);
+	w_bz += unit_mul(unit_mul(w_err_z, state->zeta), deltat);
 	w_x -= w_bx;
 	w_y -= w_by;
 	w_z -= w_bz;
 	 */
 
 	/* compute the quaternion rate measured by gyroscopes;
-	 * since the gyroscopes measure [-16,16) rads, we'll compute a
-	 * value that needs to be re-scaled back down to rads */
+	 * since the gyroscopes measure [-16,16) rads, we need to scale
+	 * up the input */
 	w_x = (i32)gyro->x << 4;
 	w_y = (i32)gyro->y << 4;
 	w_z = (i32)gyro->z << 4;
@@ -137,7 +135,6 @@ madgwick(struct madgwick_state *state, const struct gyro_state *gyro, const stru
 	quat1 += unit_mul(qdot_omega1 - unit_mul(state->beta, qhatdot1), tstep);
 	quat2 += unit_mul(qdot_omega2 - unit_mul(state->beta, qhatdot2), tstep);
 	quat3 += unit_mul(qdot_omega3 - unit_mul(state->beta, qhatdot3), tstep);
-	/* normalise quaternion */
 	scale4(&quat0, &quat1, &quat2, &quat3);
 	norm4(&quat0, &quat1, &quat2, &quat3);
 	state->quat0 = quat0;
@@ -145,7 +142,10 @@ madgwick(struct madgwick_state *state, const struct gyro_state *gyro, const stru
 	state->quat2 = quat2;
 	state->quat3 = quat3;
 
-	/* compute flux in the earth frame */
+	/* compute flux in the earth frame
+	 * and normalize the earth flux so that it
+	 * only has x and z components (in other words,
+	 * it has the same inclination as the measured flux) */
 	quat0quat1 = unit_mul(quat0, quat1);
 	quat0quat2 = unit_mul(quat0, quat2);
 	quat0quat3 = unit_mul(quat0, quat3);

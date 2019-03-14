@@ -1,4 +1,4 @@
-objects += start.o fxas.o fxos.o
+objects += start.o fxas.o fxos.o madgwick.o norm.o
 
 VPATH += ../../../dev/
 include ../../../rules.mk

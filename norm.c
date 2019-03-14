@@ -9,6 +9,16 @@ abs32(i32 v)
 	return v;
 }
 
+i32
+unit_mul(i32 a, i32 b)
+{
+	i64 prod;
+	prod = (i64)a * (i64)b;
+	prod += NORM_HALF;
+	prod >>= 15;
+	return (i32)prod;
+}
+
 int
 scale3(i32 *a, i32 *b, i32 *c)
 {
@@ -90,9 +100,9 @@ fp_scale(i32 num, i32 scale, unsigned exp)
 	i32 rv, p;
 	p = num * scale;
 	rv = (p + (1 << (exp>>2))) >> (exp>>1);
-	/* 23170 = sqrt(2) in Q.15 */
+	/* 23170 = sqrt(2) in Q0.15 */
 	if (exp&1)
-		rv = unit_mul(rv, 23170);
+		rv = unit_mul_short(rv, 23170);
 	return rv;
 }
 
@@ -218,14 +228,3 @@ recipsqrt(u32 v, int *point)
 	return x;
 }
 
-/* slow-path (assuming 32-bit hardware) */
-i32
-__unit_mul_slow(i32 a, i32 b)
-{
-	i64 rv;
-
-	rv = (i64)a * (i64)b;
-	rv += NORM_HALF;
-	rv >>= 15;
-	return rv;
-}
