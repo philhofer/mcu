@@ -3,6 +3,7 @@
 #include <gyro.h>
 #include <accel.h>
 #include <mag.h>
+#include <lpf.h>
 #include <madgwick.h>
 
 /* algorithm from:
@@ -22,7 +23,7 @@ madgwick(struct madgwick_state *state, const struct gyro_state *gyro, const stru
 	i32 J11or24, J12or23, J13or22, J14or21, J32, J33,
 	J41, J42, J43, J44, J51, J52, J53, J54, J61, J62, J63, J64;
 	i32 qhatdot0, qhatdot1, qhatdot2, qhatdot3;
-	/* unused: i32 w_err_x, w_err_y, w_err_z; */
+	i32 w_err_x, w_err_y, w_err_z;
 	i32 h_x, h_y, h_z;
 	i32 w_x, w_y, w_z;
 	i32 quat0 = (i32)state->quat0;
@@ -36,7 +37,7 @@ madgwick(struct madgwick_state *state, const struct gyro_state *gyro, const stru
 	i32 twoquat0 = 2 * quat0;
 	i32 twoquat1 = 2 * quat1;
 	i32 twoquat2 = 2 * quat2;
-	/* unused: i32 twoquat3 = 2 * quat3; */
+	i32 twoquat3 = 2 * quat3;
 	i32 twob_x = 2 * (i32)state->flux_x;
 	i32 twob_z = 2 * (i32)state->flux_z;
 	i32 twob_xquat0 = 2 * unit_mul(state->flux_x, quat0);
@@ -105,22 +106,26 @@ madgwick(struct madgwick_state *state, const struct gyro_state *gyro, const stru
 	scale4(&qhatdot0, &qhatdot1, &qhatdot2, &qhatdot3);
 	norm4(&qhatdot0, &qhatdot1, &qhatdot2, &qhatdot3);
 
-	/* compute angular estimate of gyro error;
-	 * compute and remove gyro bias
-	 *
-	 * removed since gyro drift bias was unmeasureable
-	 * in testing
-	 *
+	/* compute angular estimate of gyro error */
 	w_err_x = unit_mul(twoquat0, qhatdot1) - unit_mul(twoquat1, qhatdot0) - unit_mul(twoquat2, qhatdot3) + unit_mul(twoquat3, qhatdot2);
 	w_err_y = unit_mul(twoquat0, qhatdot2) + unit_mul(twoquat1, qhatdot3) - unit_mul(twoquat2, qhatdot0) - unit_mul(twoquat3, qhatdot1);
 	w_err_z = unit_mul(twoquat0, qhatdot3) - unit_mul(twoquat1, qhatdot2) + unit_mul(twoquat2, qhatdot1) - unit_mul(twoquat3, qhatdot0);
-	w_bx += unit_mul(unit_mul(w_err_x, state->zeta), deltat);
-	w_by += unit_mul(unit_mul(w_err_y, state->zeta), deltat);
-	w_bz += unit_mul(unit_mul(w_err_z, state->zeta), deltat);
-	w_x -= w_bx;
-	w_y -= w_by;
-	w_z -= w_bz;
+
+	/* remove gyro bias:
+	 * unlike the Madgwick paper, we use a low-pass filter here,
+	 * since the (error*zeta*deltat) figure is typically below
+	 * 1/32768, and so the integrator never actually gets going
+	 *
+	 * Using K=8 here means we estimate the average error
+	 * over ~561 samples, which is nearly 3 seconds for a 200Hz
+	 * sample rate.
 	 */
+	w_x = (i32)gyro->x << 4;
+	w_y = (i32)gyro->y << 4;
+	w_z = (i32)gyro->z << 4;
+	w_x -= lpf_cycle(&state->gerrx, w_err_x, 8);
+	w_y -= lpf_cycle(&state->gerry, w_err_y, 8);
+	w_z -= lpf_cycle(&state->gerrz, w_err_z, 8);
 
 	/* compute the quaternion rate measured by gyroscopes;
 	 * since the gyroscopes measure [-16,16) rads, we need to scale
@@ -129,9 +134,6 @@ madgwick(struct madgwick_state *state, const struct gyro_state *gyro, const stru
 	 * TODO: there is an opportunity here to CAREFULLY use
 	 * short multiplies, since we know that w_[xyz] and halfquat[0123]
 	 * are both scaled to Q0.15 at this point */
-	w_x = (i32)gyro->x << 4;
-	w_y = (i32)gyro->y << 4;
-	w_z = (i32)gyro->z << 4;
 	qdot_omega0 = unit_mul(-halfquat1, w_x) - unit_mul(halfquat2, w_y) - unit_mul(halfquat3, w_z);
 	qdot_omega1 = unit_mul(halfquat0, w_x) + unit_mul(halfquat2, w_z) - unit_mul(halfquat3, w_y);
 	qdot_omega2 = unit_mul(halfquat0, w_y) - unit_mul(halfquat1, w_z) + unit_mul(halfquat3, w_x);

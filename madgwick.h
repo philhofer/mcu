@@ -17,6 +17,7 @@
 
 struct madgwick_state {
 	unit quat0, quat1, quat2, quat3; /* quaternion orientation */
+	i32  gerrx, gerry, gerrz;        /* gyro bias filters */
 	unit flux_x, flux_z;             /* earth frame flux */
 	unit beta;                       /* fusion parameter */
 };
@@ -31,9 +32,8 @@ static inline void
 madgwick_init(struct madgwick_state *mw, unit gerror)
 {
 	mw->quat0 = NORM_ONE;
-	mw->quat1 = 0;
-	mw->quat2 = 0;
-	mw->quat3 = 0;
+	mw->quat1 = mw->quat2 = mw->quat3 = 0;
+	mw->gerrx = mw->gerry = mw->gerrz = 0;
 	mw->flux_x = NORM_ONE;
 	mw->flux_z = 0;
 	/* beta = error * sqrt(3/4) */

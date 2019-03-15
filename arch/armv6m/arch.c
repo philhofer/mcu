@@ -145,20 +145,29 @@ systick_entry(void)
 u64
 getcycles(void)
 {
-	u32 ticks, bits, addend;
+	u32 ticks, bits;
+	bool sawpend = false;
 
-	/* we need to ensure the value of 'ticks'
-	 * is consistent with the state of the counter register;
-	 * we want to avoid the case where we read 'ticks' just
-	 * before an overflow and SYST_CVR just after it.
-	 *
-	 * similarly, if we're in a context in which the systick
-	 * interrupt is masked, pretend to observe one additional tick */
-	do {
-		addend = !!(read32(SCB_ICSR)&ICSR_PENDSTSET);
-		ticks = systicks + addend;
+	if (read32(SCB_ICSR)&ICSR_PENDSTSET) {
+		/* we are in a context with equal or higher priority
+		 * than the systick timer */
+		ticks = systicks + 1;
 		bits = read32(SYST_CVR)&TICK_MASK;
-	} while (systicks + addend != ticks);
+		sawpend = true;
+	}
+	/* extra paranoia: if we were extraordinarily lucky
+	 * and observed the pending interrupt just before it
+	 * was triggered, fall back to the regular path */
+	if (!sawpend || !(read32(SCB_ICSR)&ICSR_PENDSTSET)) {
+		/* we need to ensure the value of 'ticks'
+		 * is consistent with the state of the counter register;
+		 * we want to avoid the case where we read 'ticks' just
+		 * before an overflow and SYST_CVR just after it. */
+		do {
+			ticks = systicks;
+			bits = read32(SYST_CVR)&TICK_MASK;
+		} while (systicks != ticks);
+	}
 
 	return ((u64)ticks << TICK_BITS) | (u64)(TICK_MASK - bits);
 }
