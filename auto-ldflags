@@ -1,0 +1,12 @@
+#!/bin/sh -e
+
+# capture the cross-gcc linker paths
+# so that a direct invocation of ld
+# will include a path to libgcc.a and friends
+LDPATH=$(${CC} -print-search-dirs | sed -n 's/^libraries:\ =\(.*\)/\1/p')
+for path in $(echo $LDPATH | tr ':' '\n'); do
+	[ -d $path ] || continue
+	path=$(readlink -nf $path)
+	LDFLAGS="-L${path} ${LDFLAGS}"
+done
+echo $LDFLAGS

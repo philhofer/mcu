@@ -2,7 +2,7 @@
 #include <arch.h>
 #include <error.h>
 #include <i2c.h>
-#include <drivers/i2c.h>
+#include <kernel/i2c.h>
 
 int
 i2c_write_reg(struct i2c_dev *dev, i8 addr, u8 reg, void *buf, unsigned buflen,

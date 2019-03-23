@@ -1,0 +1,3 @@
+*.so
+*.types
+*.import.scm

@@ -1,51 +1,33 @@
-include config
-
 # default Makefile rules for all targets
-
-# targets will be in board/<boardname>/<targetname>
 
 .SUFFIXES:
 
-rootdir=../../../
-boarddir=../
+# necessary for csi invocation
+rootdir=../../
+scmdir=$(rootdir)/scm
+CHICKEN_REPOSITORY_PATH="$(shell chicken-install -repository):$(realpath $(scmdir))"
+
+config.mk config.c config.h boot.s board.ld board.h: configure $(wildcard $(scmdir)/*.so)
+	@CHICKEN_REPOSITORY_PATH=$(CHICKEN_REPOSITORY_PATH) ./configure
+
+include config.mk # defines CONFIG_ARCH
 archdir=$(rootdir)/arch/$(CONFIG_ARCH)
-mcudir=$(rootdir)/mcu/$(CONFIG_MCU)
+mcudir=$(rootdir)/kernel/$(CONFIG_MCU_CLASS)
 
 # for essentially all targets, all we're
 # interested in building is the ELF objects
 # (but for some targets with weird flash programmers
 # we may want raw binary, .srec, etc.)
-.DEFAULT_GOAL ?= kernel.elf
+.DEFAULT_GOAL:=kernel.elf
 
-VPATH += $(rootdir) $(archdir) $(mcudir) $(boarddir) .
-CFLAGS += -I. -I$(rootdir) -I$(archdir) -I$(boarddir) -I$(mcudir)
+VPATH += $(rootdir) $(archdir) $(mcudir) .
+CFLAGS += -I. -I$(rootdir) -I$(archdir)
 CFLAGS += -Wall -ggdb
 
-CONFSUBST = $(rootdir)/confsubst
-
-include $(archdir)/arch.mk
-include $(mcudir)/mcu.mk
-include $(boarddir)/board.mk
-
-objects += idle.o libc.o
-
-ifeq ($(CONFIG_I2C), y)
-	objects += i2c.o
-endif
-
-ifeq ($(CONFIG_GPIO), y)
-	objects += gpio.o
-endif
-
-ifeq ($(CONFIG_USB), y)
-	objects += usb.o
-endif
-
-ifeq ($(CONFIG_USBSERIAL), y)
-	objects += usb-cdc-acm.o
-endif
-
-headers += config.h
+# fake prerequisite for determining C deps;
+# otherwise computing deps will fail before
+# configure is run
+headers += config.h board.h
 
 %.o: %.c
 	@echo "CC $@"
@@ -60,18 +42,11 @@ headers += config.h
 	@$(OBJCOPY) -Obinary $^ $@
 	@chmod -x $@
 
-%.elf: $(objects) | mcu.ld
+%.elf: $(objects) | board.ld
 	@echo "LD $@"
 	@$(LD) $(LDFLAGS) -T $| -o $@ $^ -lgcc
 	@chmod -x $@
 
-%.h: %.h.inc | config
-	@echo "CONF $@"
-	@$(CONFSUBST) $| $^ > $@
-
-%.s: %.s.inc | config
-	@echo "CONF $@"
-	@$(CONFSUBST) $| $^ > $@
 
 # generate dependency information for C files;
 # comes directly from the GNU Make manual:

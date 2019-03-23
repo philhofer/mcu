@@ -1,5 +1,0 @@
-Headers in this directory specify the interface
-that a driver for a particular subsystem must
-implement. These headers are not intended for
-use by end-user code.
-

@@ -1,0 +1,18 @@
+#!/usr/bin/csi -s
+(import feather-m0)
+
+(define (pin-at sym)
+  (cond
+    [(assq sym pin-labels) => cdr]
+    [else (error "no such pin" sym)]))
+
+(feather-m0
+  (default-i2c 'normal-speed)
+  (default-usb 'usb-cdc-acm)
+  (extint
+     ;; the FXOS/FXAS are active-low pins, and
+     ;; in this configuration they're wired to
+     ;; pins labeled A0 and A1, respectively
+    `(,(pin-at 'A0) low "gyro_drdy")
+    `(,(pin-at 'A1) low "accel_drdy"))
+  red-led)

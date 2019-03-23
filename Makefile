@@ -4,9 +4,13 @@ submakes=$(shell find . -name Makefile -type f -mindepth 2)
 subdirs=$(foreach file,$(submakes),$(dir $(file)))
 nproc=$(shell nproc)
 
+.PHONY: scheme
+scheme:
+	$(MAKE) -C scm/ all
+
 .DEFAULT_GOAL := all
 .PHONY: all clean test
-all:
+all: scheme
 	set -e; for d in $(subdirs); do $(MAKE) -j$(nproc) -C $$d all; done
 clean:
 	find . -name '*.d' | xargs rm

@@ -1,0 +1,5 @@
+#!/usr/bin/csi -s
+(import feather-m0)
+
+(feather-m0
+  red-led)

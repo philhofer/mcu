@@ -50,13 +50,7 @@ const uchar usb_acm_desc[18] = {
  * driver wanted to see, which in turn appears to be
  * cargo-culted from Table 18 of the USB CDC class standard
  * document.
- *
- * NOTE: we've skipped the (technically required) 'Call Management'
- * USB-CDC descriptor because it keeps the config length under
- * the magical 64-byte mark, and because most drivers appear to
- * default to using the CDC Union descriptor master interface
- * anyway, which is what we want. Also, who the heck is
- * using ttyACMx to make calls on a modem these days...? */
+ */
 const uchar usb_acm_config[] = {
 	9,     /* descriptor length = 9 */
 	0x02,  /* descriptor type = Configuration Descriptor (0x02) */
@@ -151,7 +145,6 @@ classdata(struct usb_dev *dev)
 static inline long
 acm_read(struct usb_dev *dev, uchar *dst, ulong len)
 {
-	/* TODO: lock irq */
 	long rd = 0;
 	struct acm_data *acm = classdata(dev);
 
@@ -179,7 +172,6 @@ acm_read(struct usb_dev *dev, uchar *dst, ulong len)
 static inline long
 acm_write(struct usb_dev *dev, const uchar *src, ulong len)
 {
-	/* TODO: lock irq */
 	struct acm_data *acm = classdata(dev);
 
 	if (acm->outstatus)
@@ -209,7 +201,6 @@ acm_idev_read(const struct input *idev, void *data, ulong dstlen)
 	return acm_read(idev->ctx, (uchar *)data, dstlen);
 }
 
-/* called in interrupt context after an OUT */
 static void
 post_out(struct usb_dev *dev, u8 ep, void *buf, uchar len, int err)
 {
@@ -226,7 +217,6 @@ post_out(struct usb_dev *dev, u8 ep, void *buf, uchar len, int err)
 		dev->drv->expect_out(dev, 0x01, acm->inbuf, sizeof(acm->inbuf));
 }
 
-/* called in interrupt context after an IN */
 static void
 post_in(struct usb_dev *dev, u8 ep, int err)
 {

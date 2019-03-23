@@ -1,5 +1,12 @@
 # Microcontroller HAL
 
+## Requirements
+
+ - A C compiler and toolchain for your target (e.g. arm-none-abi gcc+binutils)
+ - Chicken Scheme >= 5.0
+ - GNU Make
+ - A POSIX-compatible shell
+
 ## Supported Hardware
 
  - Atmel SAMD21xxx MCUs (Arduino Zero, Feather M0, etc.)
@@ -8,30 +15,24 @@
 
  - Portable code lives at the top level
  - Architecture-specific code lives in `arch/<arch>/`
- - MCU-specific code lives in `mcu/<mcu>/`
- - Board-specific code lives in `board/<board>`
- - Semi-portable code lives in `drivers/` (for example,
-   code for vendor peripherals that isn't MCU-specific)
+ - MCU-specific code lives in `kernel/<mcu>`
 
-"Projects" live underneath the board directories and contain
-a Makefile for building the necessary artifacts for the project.
+"Projects" are collections of source files, configuration,
+and build scripts necessary to produce a complete binary.
 
-## Configuration Format
+## Configuration
 
-Configuration files in the source tree use a simple text-based
-format so that they can be read as POSIX shell scripts and as
-Makefiles. The general form is:
+Board configuration is performed using the Chicken Scheme
+modules in `scm/`, plus a `configure` script in the root
+of the project directory. The board support libraries in
+`scm/` provide a declarative configuration syntax for each
+supported board/platform. The purpose of the `configure` script
+is to bridge the gap between the board-specific kernel source
+and the declared configuration. See `projects/*/configure`
+for examples.
 
-```
-# comment
-CONFIG_KEY=value
-```
-
-Note that each variable begins with `CONFIG_`, and there are no
-spaces around the `=` sign.
-
-To keep parsers maximally dumb, comment lines must have '#'
-as the first character of the line.
+TODO: this needs much better documentation. Still a bit
+of a moving target.
 
 ## Kernel Details
 

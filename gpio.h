@@ -7,14 +7,8 @@
 #define GPIO_PULLUP   (1UL << 2) /* input pin needs a pull-up */
 #define GPIO_PULLDOWN (1UL << 3) /* input pin needs pull-down */
 
-struct gpio_ops;
-
 struct gpio {
-	union {
-		const void *ptr;
-		u32         number;
-	} driver;
-	const struct gpio_ops *ops;
+	u32 number; /* opaque! driver-specific */
 };
 
 int gpio_reset(const struct gpio *gp, int flags);

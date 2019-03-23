@@ -1,0 +1,51 @@
+#!/usr/bin/csi -script
+
+;; short script for automatically
+;; producing the dependency information
+;; for each .scm file in Makefile format
+
+(import 
+  scheme
+  srfi-1
+  srfi-13
+  (chicken file)
+  (chicken process-context))
+
+(load "sharp-string.scm")
+
+(define (find-imports accum datum)
+  (if (list? datum)
+      (if (and (not (null? datum))
+               (eq? (car datum) 'import))
+	  (append (cdr datum) accum)
+	  (foldl find-imports accum (filter list? datum)))
+      accum))
+
+(define (file-imports f)
+  (let ([datum (with-input-from-file f read)])
+    (find-imports '() datum)))
+
+(define (import-basename datum)
+  (cond
+    [(symbol? datum) (symbol->string datum)]
+    [(list? datum)   (string-join (map symbol->string datum) ".")]))
+
+(define (local-import? str)
+  (file-exists? (string-append str ".scm")))
+
+(define (import-object str)
+  (string-append str ".import.scm"))
+
+(define (file-import-objects imp)
+  (let ([imports (map import-basename imp)])
+    (map import-object (filter local-import? imports))))
+
+(define (report-imports f)
+  (define objs (file-import-objects (file-imports f)))
+  (when (not (null? objs))
+    (display f)
+    (display ": ")
+    (display (string-join objs " "))
+    (display "\n")))
+
+(for-each report-imports (command-line-arguments))
