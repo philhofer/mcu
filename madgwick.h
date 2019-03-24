@@ -43,6 +43,6 @@ madgwick_init(struct madgwick_state *mw, unit gerror)
 /* madgwick() updates the internal state of the Madgwick orientation filter.
  * The 'tstep' value should be normalized to fractions-of-a-second in Q0.15 format.
  */
-void madgwick(struct madgwick_state *mw, const struct gyro_state *g, const struct accel_state *a, const struct mag_state *m, unit tstep);
+void madgwick(struct madgwick_state *mw, const struct gyro_state *g, const struct accel_state *a, const struct mag_state *m, unit tstep, bool debias);
 
 #endif

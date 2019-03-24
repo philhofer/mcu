@@ -2,31 +2,19 @@
 #define __IDLE_H_
 #include <bits.h>
 
-/* 'work' represents some code
- * to be executed in the regular
- * threading context when the system
- * would otherwise be idling. */
-struct work;
-
 struct work {
-	struct work *next;
 	void *udata;
 	void (*func)(void *udata);
 };
 
-static inline void
-init_work(struct work *w, void (*fn)(void *), void *ctx)
-{
-	w->next = NULL;
-	w->udata = ctx;
-	w->func = fn;
-}
+#define declare_work(name, f, p) \
+	__attribute__((section("work"))) const struct work name = { .udata = p, .func = f }
 
 /* schedule_work() schedules work to
  * the global queue of work to execute
  * at idle. Calling this function on work
  * that is already scheduled has no effect. */
-void schedule_work(struct work *work);
+void schedule_work(const struct work *work);
 
 /* idle_step() runs all pending work.
  *

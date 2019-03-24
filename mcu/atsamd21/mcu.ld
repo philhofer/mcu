@@ -15,6 +15,9 @@ SECTIONS {
 		*(.text*)
 		*(.rodata)
 		*(.rodata*)
+		__start_work = .;
+		*(work*)
+		__stop_work = .;
 
 		. = ALIGN(4);
 		_etext = .;

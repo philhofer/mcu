@@ -33,7 +33,7 @@ madgwick-test: madgwick.o madgwick-ref.o norm.o
 
 .DEFAULT_GOAL := all
 .PHONY: all clean
-all: $(wildcard *-test)
+all: idle-test cdc-acm-test norm-test madgwick-test
 	@set -e; for tst in $^; do ./$$tst; echo "$$tst PASS"; done
 clean:
 	rm $(cdeps) $(wildcard *.o)

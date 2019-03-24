@@ -16,7 +16,7 @@
  */
 
 void
-madgwick(struct madgwick_state *state, const struct gyro_state *gyro, const struct accel_state *accel, const struct mag_state *mag, unit tstep)
+madgwick(struct madgwick_state *state, const struct gyro_state *gyro, const struct accel_state *accel, const struct mag_state *mag, unit tstep, bool debias)
 {
 	i32 qdot_omega0, qdot_omega1, qdot_omega2, qdot_omega3;
 	i32 f0, f1, f2, f3, f4, f5;
@@ -123,9 +123,11 @@ madgwick(struct madgwick_state *state, const struct gyro_state *gyro, const stru
 	w_x = (i32)gyro->x << 4;
 	w_y = (i32)gyro->y << 4;
 	w_z = (i32)gyro->z << 4;
-	w_x -= lpf_cycle(&state->gerrx, w_err_x, 8);
-	w_y -= lpf_cycle(&state->gerry, w_err_y, 8);
-	w_z -= lpf_cycle(&state->gerrz, w_err_z, 8);
+	if (debias) {
+		w_x -= lpf_cycle(&state->gerrx, w_err_x, 8);
+		w_y -= lpf_cycle(&state->gerry, w_err_y, 8);
+		w_z -= lpf_cycle(&state->gerrz, w_err_z, 8);
+	}
 
 	/* compute the quaternion rate measured by gyroscopes;
 	 * since the gyroscopes measure [-16,16) rads, we need to scale

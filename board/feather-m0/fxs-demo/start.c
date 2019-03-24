@@ -141,8 +141,12 @@ void start(void) {
 			idle_step(true);
 		}
 		/* TODO: actually calculate the time-delta here instead
-		 * of assuming that we are always doing 200Hz... */
-		madgwick(&mw, &gstate.gyro, &mstate.accel, &mstate.mag, (32768/200));
+		 * of assuming that we are always doing 200Hz...
+		 *
+		 * we aren't turning on debiasing until we've run the
+		 * loop for two seconds and the system has presumably
+		 * gotten close to a steady-state */
+		madgwick(&mw, &gstate.gyro, &mstate.accel, &mstate.mag, (32768/200), starttime > 2*CPU_HZ);
 		print_axyz(&mw.quat0);
 	}
 }
