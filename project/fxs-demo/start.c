@@ -69,6 +69,35 @@ debias(struct fxas_state *state)
 #define FXAS_DRDY_PIN PIN_A0
 #define FXOS_DRDY_PIN PIN_A1
 
+/* both the accel+magnetometer and gyro devices
+ * are on the same bus, so we have to build a little
+ * state machine here to ensure we sequence things appropriately
+ *
+ * the order of events here is
+ *   gryo_drdy_clear_enable()
+ *     (wait for interrupt)
+ *   gyro_drdy_entry() -> fxas_read_state()
+ *     (wait for tx done callback)
+ *   gyro_on_update() -> accel_drdy_clear_enable()
+ *     (wait for interrupt)
+ *   accel_drdy_entry() -> fxos_read_state()
+ *     (wait for tx done callback)
+ *   accel_on_update()
+ */
+static bool accel_updated;
+
+static void
+gyro_on_update(void)
+{
+	accel_drdy_clear_enable();
+}
+
+static void
+accel_on_update(void)
+{
+	accel_updated = true;
+}
+
 void
 gyro_drdy_entry(void)
 {
@@ -94,8 +123,10 @@ accel_drdy_entry(void)
 
 void start(void) {
 	int err;
-	u64 starttime;
 	struct madgwick_state mw;
+
+	gstate.on_update = gyro_on_update;
+	mstate.on_update = accel_on_update;
 
 	gpio_reset(&red_led, GPIO_OUT);
 	gpio_write(&red_led, 0);
@@ -119,22 +150,17 @@ void start(void) {
 	/* initialization complete */
 	gpio_write(&red_led, 1);
 
+	/* start the measurement update event loop */
+	gyro_drdy_clear_enable();
 	for (;;) {
-		starttime = getcycles();
-		gyro_drdy_clear_enable();
-		while (gstate.last_update < starttime) {
-			assert(gstate.last_err == 0);
+		while (!accel_updated)
 			idle_step(true);
-		}
-		accel_drdy_clear_enable();
+		accel_updated = false;
 		debias(&gstate);
-		while (mstate.last_update < starttime) {
-			assert(mstate.last_err == 0);
-			idle_step(true);
-		}
 		/* TODO: actually calculate the time-delta here instead
 		 * of assuming that we are always doing 200Hz... */
 		madgwick(&mw, &gstate.gyro, &mstate.accel, &mstate.mag, (32768/200));
+		gyro_drdy_clear_enable();
 		print_axyz(&mw.quat0);
 	}
 }

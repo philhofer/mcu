@@ -10,7 +10,7 @@
 struct fxos_state {
 	struct accel_state accel;
 	struct mag_state   mag;
-	u64                last_update;
+	void               (*on_update)(void);
 	int                last_err;
 
 	u8 buf[12];

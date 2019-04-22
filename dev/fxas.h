@@ -8,7 +8,7 @@
 
 struct fxas_state {
 	struct gyro_state gyro;
-	u64               last_update;
+	void              (*on_update)(void);
 	int               last_err;
 	uchar             buf[6];
 };

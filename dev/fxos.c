@@ -134,7 +134,6 @@
 #define MINT_VECM (1U << 1)
 #define MINT_THS  (1U << 2)
 
-
 int
 fxos_enable(struct i2c_dev *dev)
 {
@@ -176,28 +175,23 @@ fxos_enable(struct i2c_dev *dev)
 	return i2c_write_sync(dev, DEV_ADDR, CTRL_REG1, buf, 1);
 }
 
-static i16
-getraw(u8 *data)
-{
-	return ((i16)data[0] << 8)|((i16)data[1]);
-}
-
 static void
 fxos_post_read(int err, void *ctx)
 {
 	struct fxos_state *state = ctx;
 	if ((state->last_err = err))
-		return;
+		goto end;
 
-
-	state->mag.x = getraw(state->buf);
-	state->mag.y = getraw(state->buf + 2);
-	state->mag.z = getraw(state->buf + 4);
+	state->mag.x = bbtoh16(state->buf);
+	state->mag.y = bbtoh16(state->buf + 2);
+	state->mag.z = bbtoh16(state->buf + 4);
 	/* accel is 14 bits; scale to 16 */
-	state->accel.x = getraw(state->buf + 6)<<2;
-	state->accel.y = getraw(state->buf + 8)<<2;
-	state->accel.z = getraw(state->buf + 10)<<2;
-	state->last_update = getcycles();
+	state->accel.x = bbtoh16(state->buf + 6)<<2;
+	state->accel.y = bbtoh16(state->buf + 8)<<2;
+	state->accel.z = bbtoh16(state->buf + 10)<<2;
+end:
+	if (state->on_update)
+		state->on_update();
 }
 
 int

@@ -1,3 +1,4 @@
 *.so
 *.types
 *.import.scm
+*.dep

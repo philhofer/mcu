@@ -93,14 +93,6 @@
 #define CTRL2_IPOL     (1U << 1) /* set logic active high instead of active low */
 #define CTRL2_PP_OD    (1U << 0) /* set open-source/open-drain instead of push-pull output driver */
 
-static inline i16
-getraw(uchar *raw)
-{
-	u16 v;
-	v = ((u16)raw[0] << 8) | (u16)raw[1];
-	return (i16)v;
-}
-
 /* convert raw measurement to
  * the 16rad/s internal scale */
 static inline mrads
@@ -122,7 +114,7 @@ raw_to_mrad(i16 in, unsigned scale)
 		ext = (ext * 73195) >> 15;
 		break;
 	case FS_1000DPS:
-		/* 32.25 mdps ... will overflow */
+		/* 32.25 mdps */
 		ext = (ext * 37767) >> 15;
 		break;
 	case FS_500DPS:
@@ -175,12 +167,13 @@ fxas_post_tx(int err, void *ctx)
 	struct fxas_state *dst = ctx;
 	if (err) {
 		dst->last_err = err;
-		return;
+	} else {
+		dst->gyro.x = raw_to_mrad((i16)bbtoh16(dst->buf+0), SELECTED_FS);
+		dst->gyro.y = raw_to_mrad((i16)bbtoh16(dst->buf+2), SELECTED_FS);
+		dst->gyro.z = raw_to_mrad((i16)bbtoh16(dst->buf+4), SELECTED_FS);
 	}
-	dst->gyro.x = raw_to_mrad(getraw(dst->buf+0), SELECTED_FS);
-	dst->gyro.y = raw_to_mrad(getraw(dst->buf+2), SELECTED_FS);
-	dst->gyro.z = raw_to_mrad(getraw(dst->buf+4), SELECTED_FS);
-	dst->last_update = getcycles();
+	if (dst->on_update)
+		dst->on_update();
 }
 
 int
