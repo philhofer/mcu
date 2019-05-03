@@ -2,6 +2,8 @@
   sam
   (;export
    sercom
+   sercom-pinmuxing
+   match-sercom
    sam-eic
    sam-periph
    sam-usb
@@ -22,19 +24,56 @@
   arm)
 
 ; record type for common sam peripheral attributes
-(define-record sam-periph name irq addr apb-index gclks pinrole pins)
+(define-record sam-periph
+	       name      ;; symbol like 'sercom or 'sam-usb
+	       irq       ;; fixnum of list of fixnum: irqs
+	       addr      ;; base address
+	       apb-index ;;
+	       gclks     ;; GCLK number (or list of numbers)
+	       pinconf)  ;; list of pairs of (symbol . char) for pin muxing
 
-(: sercom (fixnum fixnum fixnum (or (list-of fixnum) fixnum) char (list-of symbol) --> (struct sam-periph)))
-(define (sercom irq addr apb-index gclks pinrole pins)
-  (make-sam-periph 'sercom irq addr apb-index gclks pinrole pins))
+;; match a list against a pinmuxing configuration,
+;; which is a vector of lists of pairs
+(: pinmux-match ((list-of symbol) vector --> (or list false)))
+(define (pinmux-match? lst vec)
+  (let loop ([pins lst]
+	     [conf '()]
+	     [n    0])
+    (if (null? pins)
+	(reverse conf)
+	(and-let* ([item (assq (car pins) (vector-ref vec n))])
+	  (loop (cdr pins) (cons item conf) (+ n 1))))))
 
-(: sam-eic (fixnum fixnum fixnum (or (list-of fixnum) fixnum) char (list-of list) --> (struct sam-periph)))
-(define (sam-eic irq addr apb-index gclk pinrole mapping)
-  (make-sam-periph 'eic irq addr apb-index gclk pinrole mapping))
+;; sercom-pinmuxing returns a lambda that matches
+;; a single input argument (a list of pins) to pin-match
+;; or returns #f
+(define (sercom-pinmuxing irq addr apb-index gclks pin-match)
+  (lambda (pins)
+    (let ([conf (pinmux-match? pins pin-match)])
+      (if conf
+	  (sercom irq addr apb-index gclks conf)
+	  #f))))
 
-(: sam-usb (fixnum fixnum fixnum (or (list-of fixnum) fixnum) char (list-of symbol) --> (struct sam-periph)))
-(define (sam-usb irq addr apb-index gclk pinrole pins)
-  (make-sam-periph 'sam-usb irq addr apb-index gclk pinrole pins))
+;; match-sercom matches a list of pins to
+;; a set of sercom pinmuxings
+(define (match-sercom pins . muxings)
+  (let loop ([lst muxings])
+    (cond
+     [(null? lst) #f]
+     [((car lst) pins) => identity]
+     [else (loop (cdr lst))])))
+
+(: sercom (fixnum fixnum fixnum (or (list-of fixnum) fixnum) (list-of pair) --> (struct sam-periph)))
+(define (sercom irq addr apb-index gclks pinconf)
+  (make-sam-periph 'sercom irq addr apb-index gclks pinconf))
+
+(: sam-eic (fixnum fixnum fixnum (or (list-of fixnum) fixnum) (list-of list) --> (struct sam-periph)))
+(define (sam-eic irq addr apb-index gclk mapping)
+  (make-sam-periph 'eic irq addr apb-index gclk mapping))
+
+(: sam-usb (fixnum fixnum fixnum (or (list-of fixnum) fixnum) (list-of pair) --> (struct sam-periph)))
+(define (sam-usb irq addr apb-index gclk pinconf)
+  (make-sam-periph 'sam-usb irq addr apb-index gclk pinconf))
 
 (define-record sam-config
 	       eic-mapper     ; proc (pin -> fixnum)
@@ -62,6 +101,9 @@
 	 ("SYSCTRL_BASE" . #x40000800)
 	 ("NVMCTRL_BASE" . #x41004000)
 	 ("EVSYS_BASE"   . #x42000400)
+	 ("USB_CALIB_TRANSN" . "((read32(0x806024UL)>>13)&0x1f)")
+	 ("USB_CALIB_TRANSP" . "((read32(0x806024UL)>>18)&0x1f)")
+	 ("USB_CALIB_TRIM" . "((read32(0x806024UL)>>23)&0x7)")
 	 ("CPU_HZ"       . 48000000))))
 
 (define samd-large-defines
@@ -160,22 +202,20 @@
   ; APBn bus bases are #x4n000000
   (- (arithmetic-shift (sam-periph-addr p) -24) #x40))
 
-(: pinrole-num ((struct sam-periph) --> fixnum))
-(define (pinrole-num p)
-  (let ([v (- (char->integer (sam-periph-pinrole p))
+(: pinrole-num (char --> fixnum))
+(define (pinrole-num ch)
+  (let ([v (- (char->integer ch)
 	      (char->integer #\A))])
-    (assert (> v 0))
+    (assert (>= v 0))
     v))
 
-(: pinrole-num ((struct sam-periph) --> fixnum))
-(define (pinrole-num periph)
-  (- (char->integer (sam-periph-pinrole periph))
-     (char->integer #\A)))
+;; produce a C expression that assigns
+;; the given role to the given pin
+(: pinmux-expr (char symbol --> string))
+(define (pinmux-expr role pin)
+    #"port_pmux_pin(#(sam-pin-port-group pin), PORT_NUM(#(sam-pin-num pin)), #(pinrole-num role));")
 
-(: pinmux-expr ((struct periph) symbol --> string))
-(define (pinmux-expr periph pin)
-    #"port_pmux_pin(#(sam-pin-port-group pin), PORT_NUM(#(sam-pin-num pin)), #(pinrole-num periph)); /* for #(sam-periph-name periph) */")
-
+;; default GCLK assignments for peripherals
 (: sam-periph-default-clock ((struct sam-periph) --> (or (list-of fixnum) fixnum)))
 (define (sam-periph-default-clock p)
   (case (sam-periph-name p)
@@ -188,6 +228,9 @@
 (define (assign-gclk src dst)
   #"gclk_enable_clock(#src, #dst);")
 
+; zip two lists into a single list of
+; pairs with 'ks' as keys and 'vs' as values
+;
 ; n.b. this is defined in list-utils, but
 ; we really don't need to pull in a whole
 ; package for such a simple function...
@@ -212,7 +255,6 @@
     (cond
       [(and (number? gclks) (number? clks))
        (cons (assign-gclk clks gclks) lst)]
-
       [(and (list? gclks) (list? clks))
        (begin
 	 (unless (eqv? (length gclks) (length clks))
@@ -221,10 +263,10 @@
 		  (cons (assign-gclk (car cell) (cdr cell)) lst))
 		lst
 		(zip-alist clks gclks)))]
+      [else
+       (error "invalid gclk spec on" periph)])))
 
-      [else (error "invalid gclk spec on" periph)])))
-
-;; emit-sam-init board peripheral max-pins -> void
+;; sam-periph-init-exprs
 ;; produces generic initialization code for
 ;; a SAM peripheral
 (: sam-periph-init-exprs ((struct sam-periph) fixnum (list-of string) --> (list-of string)))
@@ -232,13 +274,14 @@
   (list*
     #"powermgr_apb_mask(#(sam-apb-num p), #(sam-periph-apb-index p), true);"
     (foldl (lambda (lst item)
-	     ; eic peripherals have a list of settings
-	     ; rather than a list of pins, so handle that
-	     ; case as well here
-	     (let ([pin (if (list? item) (car item) item)])
-	       (cons (pinmux-expr p pin) lst)))
+	     ;; eic peripherals have a list of settings
+	     ;; rather than a list of (pin . role) pairs;
+	     ;; luckily the special case for eics is just role A
+	     (cons
+	      (pinmux-expr (if (eic? p) #\A (cdr item)) (car item))
+	      lst))
 	   (assign-gclk-exprs p lst)
-	   (take (sam-periph-pins p) maxpins))))
+	   (take (sam-periph-pinconf p) maxpins))))
 
 (: sercom-cdecls ((struct sam-periph) list --> list))
 (define (sercom-cdecls p lst)
@@ -365,7 +408,7 @@
 
   (: claim-pins! ((struct bus) fixnum -> undefined))
   (define (claim-pins! bus num)
-    (let ([pins (sam-periph-pins (bus-peripheral bus))])
+    (let ([pins (map car (sam-periph-pinconf (bus-peripheral bus)))])
       (for-each claim-pin! (take pins num))))
 
   (: claim-and-then (fixnum ((struct bus) list -> list) (struct bus) list -> list))
@@ -394,8 +437,8 @@
       #"if(bits&(1U<<#(car row))){#(third row)_entry();}")
     (define (pin-init row)
       #"eic_configure(#(car row), #(second row));")
-    (for-each claim-pin! (map car (sam-periph-pins item)))
-    (let* ([table  (sam-eic-table (sam-config-eic-mapper config) (sam-periph-pins item))]
+    (for-each claim-pin! (map car (sam-periph-pinconf item)))
+    (let* ([table  (sam-eic-table (sam-config-eic-mapper config) (sam-periph-pinconf item))]
 	   [pinits (foldl (lambda (lst p)
 			    (cons (pin-init p) lst))
 			  (list
@@ -403,7 +446,7 @@
 			    "eic_enable();"
 			    #"irq_enable_num(#(sam-periph-irq item));")
 			  table)]
-	   [inits  (sam-periph-init-exprs item (length (sam-periph-pins item)) pinits)])
+	   [inits  (sam-periph-init-exprs item (length (sam-periph-pinconf item)) pinits)])
       (list*
 	; TODO: handle vectored EIC interrupts, where each
 	; EIC line gets a different interrupt handler

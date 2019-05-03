@@ -16,6 +16,7 @@
 
 #define SCR_SEVONPEND (1UL << 4) /* interrupt inactive->pending creates a SEV */
 
+#define ICSR_PENDSTCLR (1UL << 25) /* ICSR: clear pending systick */
 #define ICSR_PENDSTSET (1UL << 26) /* ICSR: systick pending */
 
 #define SYST_CSR   0xE000E010UL  /* control and status register */
@@ -142,34 +143,46 @@ systick_entry(void)
 	systicks++;
 }
 
+static inline bool
+systick_masked(void)
+{
+	/* TODO: this disregards exception priority levels,
+	 * which we currently do not support */
+	return (!irq_enabled() || arch_exception_number());
+}
+
 u64
 getcycles(void)
 {
+	static u64 lastticks;
 	u32 ticks, bits;
-	bool sawpend = false;
+	bool masked;
+	u64 rv;
 
-	if (read32(SCB_ICSR)&ICSR_PENDSTSET) {
-		/* we are in a context with equal or higher priority
-		 * than the systick timer */
-		ticks = systicks + 1;
-		bits = read32(SYST_CVR)&TICK_MASK;
-		sawpend = true;
-	}
-	/* extra paranoia: if we were extraordinarily lucky
-	 * and observed the pending interrupt just before it
-	 * was triggered, fall back to the regular path */
-	if (!sawpend || !(read32(SCB_ICSR)&ICSR_PENDSTSET)) {
-		/* we need to ensure the value of 'ticks'
-		 * is consistent with the state of the counter register;
-		 * we want to avoid the case where we read 'ticks' just
-		 * before an overflow and SYST_CVR just after it. */
-		do {
-			ticks = systicks;
-			bits = read32(SYST_CVR)&TICK_MASK;
-		} while (systicks != ticks);
-	}
+	/* delicate dance: we need to observe 'systicks' and
+	 * the value in SYST_CVR atomically, somehow...
+	 * we achieve this by noting that the cycle counter must
+	 * be monotonically increasing, and thus that an observation
+	 * of a decreasing cycle count means we missed a tick
+	 * (we also need to handle the case where the tick elapses
+	 * while the tick interrupt is masked) */
+	masked = systick_masked();
+	do {
+		if (masked && (read32(SCB_ICSR)&ICSR_PENDSTSET)) {
+			systicks++;
+			write32(SCB_ICSR, ICSR_PENDSTCLR);
+		}
 
-	return ((u64)ticks << TICK_BITS) | (u64)(TICK_MASK - bits);
+		/* the ordering is important here: observing
+		 * 'ticks' before CVR means that racing with
+		 * a tick gives us a value that is too small
+		 * rather than too large */
+		ticks = systicks;
+		bits = (read32(SYST_CVR)&TICK_MASK);
+		rv = ((u64)ticks << TICK_BITS) | (u64)(TICK_MASK - bits);
+	} while (rv < lastticks);
+	lastticks = rv;
+	return rv;
 }
 
 static void
@@ -180,7 +193,7 @@ systick_setup(void)
 	 * is 2.861Hz, which seems infrequent enough that
 	 * enabling the cycle counter by default isn't going
 	 * to cause too much jitter.
-	 * At that frequency, the 64-bit cycle counter would
+	 * At that frequency, the 56-bit cycle counter would
 	 * overflow after 47.6 years, which seems conservative
 	 * enough. */
 

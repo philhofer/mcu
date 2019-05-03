@@ -15,9 +15,13 @@
     scheme
     (chicken base)
     (chicken type)
+    (chicken module)
     config-base
     sam
     samd21)
+
+(reexport
+ samd21)
 
 ;; default-usb returns a usb bus
 ;; bound to the given class
@@ -40,6 +44,13 @@
     (A3 . PA04)
     (A4 . PA05)
     (A5 . PB02)
+    (SCK . PB11)
+    (MOSI . PB10)
+    (MISO . PA12)
+    (RX . PA11)
+    (TX . PA10)
+    (SCL . PA23)
+    (SDA . PA22)
     (D5 . PA15)
     (D6 . PA20)
     (D9 . PA07)
@@ -48,17 +59,27 @@
     (D12 . PA19)
     (D13 . PA17)))
 
+(: label->pin (symbol --> (or symbol false)))
+(define (label->pin label)
+  (cond
+   [(assq label pin-labels) => cdr]
+   [else #f]))
+
+(: labels->pins ((list-of symbol) --> (list-of (or symbol false))))
+(define (labels->pins lst)
+  (map label->pin lst))
+
 ;; default-i2c returns an i2c bus
 ;; bound to the pins labeled SCL/SDA
 ;; on the board, with the frequency
 ;; set to 'freq'
-(: default-i2c (fixnum #!rest * -> (struct bus)))
+(: default-i2c (symbol #!rest * -> (struct bus)))
 (define (default-i2c freq . devices)
-  (i2c-bus freq (sercom-num 3) devices))
+  (pins->i2c (labels->pins '(SDA SCL)) freq devices))
 
-(: extint (#!rest list -> (struct sam-periph)))
-(define (extint . mapping)
-  (eic mapping))
+;; uncomment this when the SPI driver gets implmented
+#;(define (default-spi mode . devices)
+  (pins->spi (labels->pins '(MOSI MISO SCK)) mode))
 
 (: feather-m0 ((list-of *) -> undefined))
 (define (feather-m0 . config)

@@ -115,30 +115,6 @@ dfll_calibrate(void)
 	write16(SYSCTRL_BASE + SYSCTRL_DFLLVAL, fine|(coarse<<DFLLVAL_COARSE_SHIFT));
 }
 
-unsigned
-usb_transn(void)
-{
-	/* transn is 5 bits, starting at bit 45, so
-	 * bit 13 in the second word */
-	return (read32(0x806024UL) >> 13) & 0x1f;
-}
-
-unsigned
-usb_transp(void)
-{
-	/* transp is 5 bits, starting at bit 50,
-	 * so bit 18 in the second word */
-	return (read32(0x806024UL) >> 18) & 0x1f;
-}
-
-unsigned
-usb_trim(void)
-{
-	/* trim is 3 bits, starting at bit 55,
-	 * so bit 23 in the second word */
-	return (read32(0x806024UL) >> 23) & 0x1f;
-}
-
 void
 clock_init_defaults(void)
 {

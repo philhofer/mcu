@@ -4,7 +4,7 @@ CSC := csc
 EXTENSIONS := sharp-string
 CSCFLAGS = -X sharp-string -O2
 
-src=config-base.scm arm.scm sam.scm samd21.scm samd09.scm feather-m0.scm itsybitsy-m0.scm seesaw.scm
+src=config-base.scm arm.scm sam.scm samd21.scm samd09.scm feather-m0.scm itsybitsy-m0.scm
 
 # special rules for the sharp string syntax compiler extension
 sharp-string.so sharp-string.import.scm: sharp-string.scm

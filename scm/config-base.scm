@@ -53,15 +53,15 @@
 
 (import
   scheme
-  chicken.base
-  chicken.type
-  chicken.syntax
+  (chicken base)
+  (chicken type)
+  (chicken syntax)
+  (chicken read-syntax)
+  (chicken port)
+  (chicken io)
   srfi-1  ;; filter
   srfi-69 ;; hash tables
-  srfi-13 ;; string processing
-  chicken.read-syntax
-  chicken.port
-  chicken.io)
+  srfi-13) ;; string processing
 
 ;; script for generating C source files
 ;; based on s-expression-based hardware

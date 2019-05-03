@@ -64,11 +64,6 @@ debias(struct fxas_state *state)
 
 }
 
-/* select the pin adjacent to SDA/SCL
- * as the gyro data ready interrupt line */
-#define FXAS_DRDY_PIN PIN_A0
-#define FXOS_DRDY_PIN PIN_A1
-
 /* both the accel+magnetometer and gyro devices
  * are on the same bus, so we have to build a little
  * state machine here to ensure we sequence things appropriately
@@ -135,9 +130,6 @@ void start(void) {
 	assert(default_i2c_init() == 0);
 
 	madgwick_init(&mw, 10);
-
-	err = i2c_dev_reset(&default_i2c, I2C_SPEED_NORMAL);
-	assert(err == 0);
 
 	err = fxas_enable(&default_i2c);
 	assert(err == 0);

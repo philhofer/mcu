@@ -270,9 +270,9 @@ sam_usb_init(struct usb_dev *dev)
 
 	/* calibrate from NVM */
 	write16(USB_BASE + USB_PADCAL,
-			(usb_trim() << TRIM_SHIFT)|
-			(usb_transn() << TRANSN_SHIFT)|
-			(usb_transp() << TRANSP_SHIFT));
+			(USB_CALIB_TRIM << TRIM_SHIFT)|
+			(USB_CALIB_TRANSN << TRANSN_SHIFT)|
+			(USB_CALIB_TRANSP << TRANSP_SHIFT));
 
 	/* make sure we're detached from the bus
 	 * while we do the rest of the initialization

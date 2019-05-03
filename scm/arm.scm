@@ -52,6 +52,7 @@
 .word fatal0+1
 .word fatal0+1
 .word fatal0+1
+.word fatal0+1
 .word svcall_entry+1
 .word fatal0+1
 .word fatal0+1
