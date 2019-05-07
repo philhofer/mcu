@@ -98,7 +98,6 @@
 	 ("DSU_BASE"     . #x41002000)
 	 ("PORT_BASE"    . #x41004400)
 	 ("DMAC_BASE"    . #x41004800)
-	 ("SYSCTRL_BASE" . #x40000800)
 	 ("NVMCTRL_BASE" . #x41004000)
 	 ("EVSYS_BASE"   . #x42000400)
 	 ("USB_CALIB_TRANSN" . "((read32(0x806024UL)>>13)&0x1f)")
@@ -213,7 +212,8 @@
 ;; the given role to the given pin
 (: pinmux-expr (char symbol --> string))
 (define (pinmux-expr role pin)
-    #"port_pmux_pin(#(sam-pin-port-group pin), PORT_NUM(#(sam-pin-num pin)), #(pinrole-num role));")
+  (let ([rawnum (bitwise-and (sam-pin-num pin) #x1f)])
+    #"port_pmux_pin(#(sam-pin-port-group pin), #rawnum, #(pinrole-num role));"))
 
 ;; default GCLK assignments for peripherals
 (: sam-periph-default-clock ((struct sam-periph) --> (or (list-of fixnum) fixnum)))
@@ -271,17 +271,16 @@
 ;; a SAM peripheral
 (: sam-periph-init-exprs ((struct sam-periph) fixnum (list-of string) --> (list-of string)))
 (define (sam-periph-init-exprs p maxpins lst)
-  (list*
-    #"powermgr_apb_mask(#(sam-apb-num p), #(sam-periph-apb-index p), true);"
+  (define (assign-pins p lst)
     (foldl (lambda (lst item)
-	     ;; eic peripherals have a list of settings
-	     ;; rather than a list of (pin . role) pairs;
-	     ;; luckily the special case for eics is just role A
 	     (cons
 	      (pinmux-expr (if (eic? p) #\A (cdr item)) (car item))
 	      lst))
-	   (assign-gclk-exprs p lst)
-	   (take (sam-periph-pinconf p) maxpins))))
+	   lst
+	   (take (sam-periph-pinconf p) maxpins)))
+  (cons
+    #"powermgr_apb_mask(#(sam-apb-num p), #(sam-periph-apb-index p), true);"
+    (assign-gclk-exprs p (assign-pins p lst))))
 
 (: sercom-cdecls ((struct sam-periph) list --> list))
 (define (sercom-cdecls p lst)

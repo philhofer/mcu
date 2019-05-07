@@ -120,13 +120,13 @@ void start(void) {
 	int err;
 	struct madgwick_state mw;
 
+	default_usb_acm_data.discard_in = true;
 	gstate.on_update = gyro_on_update;
 	mstate.on_update = accel_on_update;
 
 	gpio_reset(&red_led, GPIO_OUT);
 	gpio_write(&red_led, 0);
 
-	default_usb_init();
 	assert(default_i2c_init() == 0);
 
 	madgwick_init(&mw, 10);
@@ -137,6 +137,7 @@ void start(void) {
 	err = fxos_enable(&default_i2c);
 	assert(err == 0);
 
+	default_usb_init();
 	extint_init();
 
 	/* initialization complete */

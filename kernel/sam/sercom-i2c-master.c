@@ -1,7 +1,7 @@
 #include <arch.h>
 #include <bits.h>
+#include <board.h>
 #include <error.h>
-#include <config.h>
 #include <i2c.h>
 #include <kernel/i2c.h>
 #include <kernel/sam/sercom-i2c-master.h>
