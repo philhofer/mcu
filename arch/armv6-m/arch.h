@@ -42,7 +42,7 @@ irq_enabled(void)
 		:
 		: "memory"
 		);
-	return (bool)(out&1);
+	return !(out&1);
 }
 
 static inline ulong
