@@ -16,7 +16,7 @@
  */
 
 void
-madgwick(struct madgwick_state *state, const struct gyro_state *gyro, const struct accel_state *accel, const struct mag_state *mag, unit tstep)
+madgwick(struct madgwick_state *state, const struct gyro_state *gyro, const struct accel_state *accel, const struct mag_state *mag, unit tstep, bool calibrate)
 {
 	i32 qdot_omega0, qdot_omega1, qdot_omega2, qdot_omega3;
 	i32 f0, f1, f2, f3, f4, f5;
@@ -106,11 +106,13 @@ madgwick(struct madgwick_state *state, const struct gyro_state *gyro, const stru
 	scale4(&qhatdot0, &qhatdot1, &qhatdot2, &qhatdot3);
 	norm4(&qhatdot0, &qhatdot1, &qhatdot2, &qhatdot3);
 
-	/* compute angular estimate of gyro error */
-	w_err_x = unit_mul(twoquat0, qhatdot1) - unit_mul(twoquat1, qhatdot0) - unit_mul(twoquat2, qhatdot3) + unit_mul(twoquat3, qhatdot2);
-	w_err_y = unit_mul(twoquat0, qhatdot2) + unit_mul(twoquat1, qhatdot3) - unit_mul(twoquat2, qhatdot0) - unit_mul(twoquat3, qhatdot1);
-	w_err_z = unit_mul(twoquat0, qhatdot3) - unit_mul(twoquat1, qhatdot2) + unit_mul(twoquat2, qhatdot1) - unit_mul(twoquat3, qhatdot0);
-
+	/* compute angular estimate of gyro error; we only
+	 * use this when we aren't in calibration mode */
+	if (!calibrate) {
+		w_err_x = unit_mul(twoquat0, qhatdot1) - unit_mul(twoquat1, qhatdot0) - unit_mul(twoquat2, qhatdot3) + unit_mul(twoquat3, qhatdot2);
+		w_err_y = unit_mul(twoquat0, qhatdot2) + unit_mul(twoquat1, qhatdot3) - unit_mul(twoquat2, qhatdot0) - unit_mul(twoquat3, qhatdot1);
+		w_err_z = unit_mul(twoquat0, qhatdot3) - unit_mul(twoquat1, qhatdot2) + unit_mul(twoquat2, qhatdot1) - unit_mul(twoquat3, qhatdot0);
+	}
 	/* remove gyro bias:
 	 * unlike the Madgwick paper, we use a low-pass filter here,
 	 * since the (error*zeta*deltat) figure is typically below
@@ -123,6 +125,11 @@ madgwick(struct madgwick_state *state, const struct gyro_state *gyro, const stru
 	w_x = (i32)gyro->x << 4;
 	w_y = (i32)gyro->y << 4;
 	w_z = (i32)gyro->z << 4;
+	if (calibrate) {
+		w_err_x = w_x;
+		w_err_y = w_y;
+		w_err_z = w_z;
+	}
 	w_x -= lpf_cycle(&state->gerrx, w_err_x, 8);
 	w_y -= lpf_cycle(&state->gerry, w_err_y, 8);
 	w_z -= lpf_cycle(&state->gerrz, w_err_z, 8);

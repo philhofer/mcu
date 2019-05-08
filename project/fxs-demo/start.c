@@ -1,4 +1,5 @@
 #include <bits.h>
+#include <error.h>
 #include <config.h>
 #include <arch.h>
 #include <board.h>
@@ -54,16 +55,6 @@ print_axyz(i16 *m)
 	acm_odev_write(&usbttyout, outbuf, p - outbuf);
 }
 
-static void
-debias(struct fxas_state *state)
-{
-	/* these were my measured zero-rate biases */
-	state->gyro.x -= 21;
-	state->gyro.y -= 10;
-	state->gyro.z -= 5;
-
-}
-
 /* both the accel+magnetometer and gyro devices
  * are on the same bus, so we have to build a little
  * state machine here to ensure we sequence things appropriately
@@ -116,8 +107,35 @@ accel_drdy_entry(void)
 	assert(err == 0);
 }
 
-void start(void) {
+static void
+timing_error(void)
+{
+	const char *msg = "\r\nTiming Error!\r\n";
+	while (acm_odev_write(&usbttyout, msg, 17) == -EAGAIN) ;
+	bkpt();
+}
+
+static u64
+main_iter(struct madgwick_state *mw, u64 lastupd, bool calibrate)
+{
+	u64 updtime;
+	while (!accel_updated) {
+		if (lastupd && (getcycles()-lastupd) > (CPU_HZ/10))
+			timing_error();
+		idle_step(true);
+	}
+	updtime = getcycles();
+	accel_updated = false;
+	madgwick(mw, &gstate.gyro, &mstate.accel, &mstate.mag, (32768/200), calibrate);
+	gyro_drdy_clear_enable();
+	print_axyz(&mw->quat0);
+	return updtime;
+}
+
+void
+start(void) {
 	int err;
+	u64 lastupd;
 	struct madgwick_state mw;
 
 	default_usb_acm_data.discard_in = true;
@@ -127,7 +145,9 @@ void start(void) {
 	gpio_reset(&red_led, GPIO_OUT);
 	gpio_write(&red_led, 0);
 
+	default_usb_init();
 	assert(default_i2c_init() == 0);
+	extint_init();
 
 	madgwick_init(&mw, 10);
 
@@ -137,23 +157,15 @@ void start(void) {
 	err = fxos_enable(&default_i2c);
 	assert(err == 0);
 
-	default_usb_init();
-	extint_init();
-
 	/* initialization complete */
 	gpio_write(&red_led, 1);
 
-	/* start the measurement update event loop */
+	lastupd = 0;
 	gyro_drdy_clear_enable();
-	for (;;) {
-		while (!accel_updated)
-			idle_step(true);
-		accel_updated = false;
-		debias(&gstate);
-		/* TODO: actually calculate the time-delta here instead
-		 * of assuming that we are always doing 200Hz... */
-		madgwick(&mw, &gstate.gyro, &mstate.accel, &mstate.mag, (32768/200));
-		gyro_drdy_clear_enable();
-		print_axyz(&mw.quat0);
-	}
+
+	/* run about three seconds of calibration */
+	for (unsigned i=0; i<600; i++)
+		lastupd = main_iter(&mw, lastupd, true);
+	for (;;)
+		lastupd = main_iter(&mw, lastupd, false);
 }
