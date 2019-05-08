@@ -147,6 +147,7 @@
 	  [line (first row)])
       (list*
 	(make-cdefine #"#{name}_enable()" #"extirq_enable(#line)")
+	(make-cdefine #"#{name}_enabled()" #"extirq_enabled(#line)")
 	(make-cdefine #"#{name}_disable()" #"extirq_disable(#line)")
 	(make-cdefine #"#{name}_triggered()" #"(extirq_triggered(#line))")
 	(make-cdefine #"#{name}_clear_enable()" #"extirq_clear_enable(#line)")

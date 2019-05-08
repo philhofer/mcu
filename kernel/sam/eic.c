@@ -57,6 +57,12 @@ extirq_enable(unsigned num)
 	write32(EIC_BASE + EIC_INTENSET, 1U << num);
 }
 
+bool
+extirq_enabled(unsigned num)
+{
+	return !!(read32(EIC_BASE + EIC_INTENSET)&(1U << num));
+}
+
 void
 extirq_clear_enable(unsigned num)
 {
