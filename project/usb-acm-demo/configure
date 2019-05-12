@@ -1,6 +1,6 @@
 #!/usr/bin/csi -s
-(import feather-m0)
+(import itsybitsy-m0)
 
-(feather-m0
+(itsybitsy-m0
   (default-usb 'usb-cdc-acm)
   red-led)

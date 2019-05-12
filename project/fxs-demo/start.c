@@ -22,7 +22,7 @@ static void
 print_axyz(i16 *m)
 {
 	/* four 6-character numbers, three commas, and a carriage return */
-	char outbuf[6*4 + 3 + 1];
+	char outbuf[32];
 	char *p = outbuf;
 	i16 v;
 	int i;
@@ -60,32 +60,42 @@ print_axyz(i16 *m)
  * state machine here to ensure we sequence things appropriately
  *
  * the order of events here is
- *   gryo_drdy_clear_enable()
+ *   fxas_drdy_clear_enable()
  *     (wait for interrupt)
- *   gyro_drdy_entry() -> fxas_read_state()
+ *   fxas_drdy_entry() -> fxas_read_state()
  *     (wait for tx done callback)
- *   gyro_on_update() -> accel_drdy_clear_enable()
+ *   gyro_on_update() -> fxos_drdy_clear_enable()
  *     (wait for interrupt)
- *   accel_drdy_entry() -> fxos_read_state()
+ *   fxos_drdy_entry() -> fxos_read_state()
  *     (wait for tx done callback)
- *   accel_on_update()
+ *   accel_on_update() -> accel_updated = true
  */
 static bool accel_updated;
 
 static void
 gyro_on_update(void)
 {
-	accel_drdy_clear_enable();
+	assert(gstate.last_err == 0);
+	/* as an optimization, elide the fxos_drdy
+	 * interrupt handler when we know it would
+	 * be triggered anyway; this is the case more
+	 * often than not, since both devices are running
+	 * on the same output data rate */
+	if (fxos_drdy_triggered())
+		fxos_drdy_entry();
+	else
+		fxos_drdy_clear_enable();
 }
 
 static void
 accel_on_update(void)
 {
+	assert(mstate.last_err == 0);
 	accel_updated = true;
 }
 
 void
-gyro_drdy_entry(void)
+fxas_drdy_entry(void)
 {
 	int err;
 
@@ -99,7 +109,7 @@ gyro_drdy_entry(void)
 }
 
 void
-accel_drdy_entry(void)
+fxos_drdy_entry(void)
 {
 	int err;
 
@@ -120,14 +130,14 @@ main_iter(struct madgwick_state *mw, u64 lastupd, bool calibrate)
 {
 	u64 updtime;
 	while (!accel_updated) {
-		if (lastupd && (getcycles()-lastupd) > (CPU_HZ/10))
+		if (lastupd && (getcycles()-lastupd) > CPU_HZ)
 			timing_error();
 		idle_step(true);
 	}
 	updtime = getcycles();
 	accel_updated = false;
 	madgwick(mw, &gstate.gyro, &mstate.accel, &mstate.mag, (32768/200), calibrate);
-	gyro_drdy_clear_enable();
+	fxas_drdy_clear_enable();
 	print_axyz(&mw->quat0);
 	return updtime;
 }
@@ -161,7 +171,7 @@ start(void) {
 	gpio_write(&red_led, 1);
 
 	lastupd = 0;
-	gyro_drdy_clear_enable();
+	fxas_drdy_clear_enable();
 
 	/* run about three seconds of calibration */
 	for (unsigned i=0; i<600; i++)

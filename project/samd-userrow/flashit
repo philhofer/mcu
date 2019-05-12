@@ -1,0 +1,6 @@
+target remote 192.168.2.65:2331
+monitor reset
+load userrow.elf
+monitor reg sp = (0x00000000)
+monitor reg pc = (0x00000004)
+

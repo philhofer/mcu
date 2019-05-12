@@ -1,5 +1,3 @@
-#include <bits.h>
-
 /* this file is used to generate
  * an SREC file to program the NVM User Row */
 
@@ -10,5 +8,5 @@
 #define USER_ROW_DEFAULT 0xFFFFFC5DD8E0C7FF
 
 __attribute__((section(".userrow")))
-u64 userrow = USER_ROW_DEFAULT;
+unsigned long long userrow = USER_ROW_DEFAULT;
 

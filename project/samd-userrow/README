@@ -1,0 +1,11 @@
+Running 'make' here will generate an ELF
+object that can be loaded onto a Microchip SAMD
+MCU in order to re-program the NVM 'User Row' memory.
+
+If you have a SAM MCU with chip-erase or bootloader protection
+enabled, you'll need to reprogram the User Row before you're
+able to rewrite the contents of the on-board flash.
+
+An easy way to re-program the NVM memory is to use
+a debugger that exposes a GDB server, and then run
+'load userrow.elf' in GDB to program the memory.

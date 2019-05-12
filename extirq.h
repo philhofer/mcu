@@ -31,10 +31,10 @@ void extirq_clear_enable(unsigned num);
  * routine for an external interrupt handler */
 void extirq_disable(unsigned num);
 
-/* extint_triggered() returns whether or not the
+/* extirq_triggered() returns whether or not the
  * external interrupt source is triggered.
  * Note that triggering is independent from the
  * interrupt handling routine from being enabled. */
-bool extint_triggered(unsigned num);
+bool extirq_triggered(unsigned num);
 
 #endif

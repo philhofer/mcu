@@ -13,6 +13,6 @@
      ;; the FXOS/FXAS are active-low pins, and
      ;; in this configuration they're wired to
      ;; pins labeled A0 and A1, respectively
-    `(,(pin-at 'A0) low "gyro_drdy")
-    `(,(pin-at 'A1) low "accel_drdy"))
+    `(,(pin-at 'A0) low "fxas_drdy")
+    `(,(pin-at 'A1) low "fxos_drdy"))
   red-led)
